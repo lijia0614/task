@@ -5,10 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.task.TaskApplication;
 import com.task.entity.SysGroup;
 import com.task.entity.SysUser;
+import com.task.entity.TaskMember;
 import com.task.enums.AssignType;
 import com.task.enums.Role;
 import com.task.mapper.SysGroupMapper;
 import com.task.mapper.SysUserMapper;
+import com.task.mapper.TaskMemberMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +38,7 @@ class WeightValidationTest {
     @Autowired ObjectMapper om;
     @Autowired SysGroupMapper groupMapper;
     @Autowired SysUserMapper userMapper;
+    @Autowired TaskMemberMapper memberMapper;
     @Autowired JdbcTemplate jdbcTemplate;
 
     /** 本用例自建数据 id（按依赖顺序物理清理：task_member → task → sys_group → sys_user） */
@@ -90,20 +93,24 @@ class WeightValidationTest {
         return groupId;
     }
 
-    private String createTask(String token, String assignType, Long assigneeId, String weightsJson) throws Exception {
-        return mvc.perform(post("/api/tasks").header("Authorization", "Bearer " + token)
+    /**
+     * 创建任务（单次请求）：断言 code=0，解析 taskId 并记录该 task 及其全部 task_member id，
+     * 供 @AfterEach 按依赖顺序清理（task_member → task）。成功创建只发一次请求。
+     */
+    private void createTaskAndTrack(String token, String assignType, Long assigneeId, String weightsJson) throws Exception {
+        String body = mvc.perform(post("/api/tasks").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"权重测试任务-" + System.currentTimeMillis() + "\",\"assignType\":\"" + assignType
                                 + "\",\"assigneeId\":" + assigneeId
                                 + (weightsJson == null ? "" : ",\"weights\":" + weightsJson) + "}"))
+                .andExpect(jsonPath("$.code").value(0))
                 .andReturn().getResponse().getContentAsString();
-    }
-
-    private void recordTaskId(String body) {
-        try {
-            createdTaskIds.add(Long.parseLong(body.replaceAll(".*\"data\":(\\d+).*", "$1")));
-        } catch (NumberFormatException ignored) {
-            // 创建失败的任务没有 id，无需清理
+        long taskId = Long.parseLong(body.replaceAll(".*\"data\":(\\d+).*", "$1"));
+        createdTaskIds.add(taskId);
+        // 记录该 task 的全部 task_member（组任务/个人任务都有）
+        for (TaskMember tm : memberMapper.selectList(new LambdaQueryWrapper<TaskMember>()
+                .eq(TaskMember::getTaskId, taskId))) {
+            createdMemberIds.add(tm.getId());
         }
     }
 
@@ -147,28 +154,20 @@ class WeightValidationTest {
                 .andExpect(jsonPath("$.code").value(400));
     }
 
-    /** 组任务合法权重（每项 1..100、总和 100）通过 */
+    /** 组任务合法权重（每项 1..100、总和 100）通过；记录 task 及全部 task_member 供清理 */
     @Test
     void groupTaskValidWeightsAccepted() throws Exception {
         long groupId = createGroup(2);
         String leaderToken = login("leader1", "123456");
-        String body = createTask(leaderToken, AssignType.GROUP.getValue(), groupId, "[60,40]");
-        recordTaskId(body);
-        mvc.perform(post("/api/tasks").header("Authorization", "Bearer " + leaderToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"权重测试任务-x\",\"assignType\":\"GROUP\",\"assigneeId\":" + groupId + ",\"weights\":[60,40]}"))
-                .andExpect(jsonPath("$.code").value(0));
-        org.junit.jupiter.api.Assertions.assertTrue(createdTaskIds.size() >= 1, "合法权重任务应创建成功");
+        createTaskAndTrack(leaderToken, AssignType.GROUP.getValue(), groupId, "[60,40]");
     }
 
-    /** 个人任务忽略 weights（即使非法也按 weight=100 创建成功） */
+    /** 个人任务忽略 weights（即使非法也按 weight=100 创建成功）；记录 task 及 task_member 供清理 */
     @Test
     void individualTaskIgnoresWeights() throws Exception {
         long groupId = createGroup(1);
         long userId = groupMemberId(groupId);
         String leaderToken = login("leader1", "123456");
-        String body = createTask(leaderToken, AssignType.INDIVIDUAL.getValue(), userId, "[0]");
-        recordTaskId(body);
-        org.junit.jupiter.api.Assertions.assertTrue(createdTaskIds.size() >= 1, "个人任务应忽略 weights 创建成功");
+        createTaskAndTrack(leaderToken, AssignType.INDIVIDUAL.getValue(), userId, "[0]");
     }
 }
