@@ -28,10 +28,12 @@
 
 | 操作 | 员工 | 组长 | 管理员 |
 |---|---|---|---|
-| 查看分配给自己的任务、提交汇报、评论 | ✓ | ✓ | ✓ |
-| 查看自己小组的任务/汇报 | ✓（本组） | ✓ | ✓ |
+| 查看任务（全部登录用户可见）、评论任务/通过的汇报 | ✓ | ✓ | ✓ |
+| 查看通过审核的汇报、对其评论 | ✓ | ✓ | ✓ |
+| 查看本人全部汇报（含未通过/审核详情） | ✓（本人） | ✓（本人） | ✓ |
+| 提交汇报 | ✓（仅被分配的任务） | ✓（仅被分配的任务） | ✓ |
 | 创建任务、调整成员权重 | ✗ | ✓ | ✓ |
-| 审核汇报（仅任务分配者） | ✗ | ✓ | ✓ |
+| 审核汇报（仅任务分配者；管理员任意） | ✗ | ✓ | ✓ |
 | 管理小组 | ✗ | 仅自己的组 | 所有组 |
 | 用户管理 | ✗ | ✗ | ✓ |
 
@@ -103,10 +105,11 @@
 | task_member_id | BIGINT | 关联成员记录 |
 | user_id | BIGINT | 汇报人 |
 | content | TEXT | 汇报内容 |
-| progress | INT | 本次汇报的目标进度 0-100 |
+| progress | INT | 汇报时填写的目标进度 0-100 |
+| final_progress | INT NULL | 审核最终确定的进度（审核员手动调节；为空 = 与汇报一致） |
 | status | VARCHAR(20) | PENDING / APPROVED / REJECTED |
 | reviewer_id | BIGINT NULL | 审核人 |
-| review_comment | VARCHAR(255) NULL | 审核意见（驳回时必填） |
+| review_comment | VARCHAR(255) NULL | 审核内容/意见（驳回时必填） |
 | reviewed_at | DATETIME NULL | 审核时间 |
 | created_at | DATETIME | |
 
@@ -127,11 +130,14 @@
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | id | BIGINT PK | |
-| task_id | BIGINT | |
+| task_id | BIGINT NULL | 任务级评论（二选一，与 report_id 互斥） |
+| report_id | BIGINT NULL | 汇报级评论（二选一，与 task_id 互斥） |
 | parent_id | BIGINT | 0 = 顶级评论；>0 = 回复该评论（一级嵌套，不允许回复回复） |
 | user_id | BIGINT | |
 | content | TEXT | |
 | created_at | DATETIME | |
+
+评论对象分两种：**任务评论**（comment.task_id）与**汇报评论**（comment.report_id），互斥二选一。
 
 ### 3.8 minio_file（通用文件记录）
 
@@ -159,10 +165,15 @@
 
 1. 员工（成员）对分配给自己的任务提交汇报：内容 + 目标进度 + 说明
 2. 汇报状态 PENDING → 分配者（创建者）在「待我审核」列表查看
-3. 审核：
-   - 通过：事务内更新 `task_member.progress = report.progress`，重算任务整体进度，必要时置 DONE
-   - 驳回：填审核意见，成员进度不变，汇报状态 REJECTED
+3. 审核（必须填写审核内容/意见）：
+   - **通过**：审核内容可留空也可填写；审核员**可手动调节本次汇报的最终进度**（默认 = 汇报填写的进度）。事务内更新 `report.final_progress`、`task_member.progress = final_progress`，重算任务整体进度，必要时置 DONE
+   - **驳回**：审核内容**必填**（不通过的理由），成员进度不变，汇报状态 REJECTED
 4. 汇报进度必须 ≥ 当前成员进度（单调递增），否则拒绝提交
+5. **汇报可见性**：
+   - 汇报人本人：可见自己的全部汇报（含 PENDING / REJECTED 及审核详情）
+   - 审核人（任务创建者/管理员）：可见全部汇报及审核详情
+   - 其他用户：**只能看到 APPROVED（通过审核）的汇报**，可对其评论
+6. **审核详情**（审核人、审核内容、审核时间、最终确定的进度）随汇报记录落库，汇报人在「我的任务」任务详情中随时查看
 
 ### 4.3 任务整体进度与完成判定
 
@@ -177,8 +188,11 @@
 
 ### 4.4 评论
 
-- 顶级评论 + 一级回复（parent_id），平铺时间序展示
-- 任务参与者（成员、创建者、本组组长、管理员）均可评论；回复时 `@用户名` 展示在渲染层
+评论对象分两种，顶级评论 + 一级回复（parent_id），平铺时间序展示，回复时 `@用户名` 展示在渲染层：
+
+- **任务评论**（task_id）：所有登录用户（能查看该任务）均可评论任务
+- **汇报评论**（report_id）：所有能查看该汇报的用户均可评论；**非本人/非审核人只能看到并通过审核（APPROVED）的汇报发表评论**；汇报人可对收到的评论进行回复
+- 评论权限跟随汇报可见性：REJECTED / PENDING 的汇报评论仅汇报人与审核人可见
 
 ### 4.5 附件
 
@@ -210,7 +224,7 @@
 - `DELETE /groups/{id}/members/{userId}` — 移除成员
 
 ### 任务
-- `GET /tasks?type=mine_created|assigned|all&status=&keyword=` — 列表（含进度、成员数）；**可见性**：员工仅见本人参与或本组任务（所有 type 均过滤），组长/管理员可见全部
+- `GET /tasks?type=mine_created|assigned|all&status=&keyword=` — 列表（含进度、成员数）；所有登录用户可见全部任务，type 仅作快捷筛选
 - `POST /tasks` — 创建（name, description, deadline, assignType, assigneeId, attachments[]）
 - `GET /tasks/{id}` — 详情（含成员+权重+进度、附件）
 - `PUT /tasks/{id}` — 修改基本信息（分配者/管理员）
@@ -223,15 +237,17 @@
 
 ### 汇报
 - `POST /tasks/{id}/reports` — 提交汇报 {content, progress}
-- `GET /tasks/{id}/reports` — 任务汇报列表（成员、分配者、组长、管理员）
+- `GET /tasks/{id}/reports` — 任务汇报列表；**可见性**：本人/审核人见全部（含审核详情：审核人、审核内容、审核时间、最终进度），其他人仅见 APPROVED
 - `GET /reports/pending` — 待我审核列表（审核人 = 当前用户）
-- `POST /reports/{id}/approve` — 通过
-- `POST /reports/{id}/reject` — 驳回 {reviewComment}
+- `POST /reports/{id}/approve` — 通过 {progress?, reviewComment?}：progress 可空（为空用汇报进度，**可手动调节最终进度**）；reviewComment 为审核内容，可空
+- `POST /reports/{id}/reject` — 驳回 {reviewComment}：**审核内容必填**（不通过的理由）
 
 ### 评论
-- `GET /tasks/{id}/comments` — 列表（顶级 + 回复）
-- `POST /tasks/{id}/comments` — 发评论 {content}
-- `POST /comments/{id}/reply` — 回复 {content}
+- `GET /tasks/{id}/comments` — 任务评论列表（顶级 + 回复）
+- `POST /tasks/{id}/comments` — 发任务评论 {content}
+- `GET /reports/{id}/comments` — 汇报评论列表（可见性跟随汇报：非本人/非审核人仅见 APPROVED 汇报的评论）
+- `POST /reports/{id}/comments` — 评论汇报 {content}
+- `POST /comments/{id}/reply` — 回复评论（任务/汇报评论通用）{content}
 
 ## 6. 前端页面
 
@@ -240,10 +256,10 @@
 | 页面 | 路由 | 要点 |
 |---|---|---|
 | 登录 | /login | 账号密码登录，存 token 到 localStorage，路由守卫 |
-| 任务列表 | /tasks | Tab：我创建的 / 分配给我的 / 全部；状态筛选；进度条；创建按钮（组长/管理员）。**可见范围**：员工只能看到本人参与的或本组任务（「全部」Tab 同样过滤）；组长/管理员可见全部 |
+| 任务列表 | /tasks | Tab：我创建的 / 分配给我的 / 全部；状态筛选；进度条；创建按钮（组长/管理员）。所有登录用户可见全部任务，Tab 仅作快捷筛选 |
 | 创建任务 | /tasks/create | 三步：基本信息 → 分配对象（个人/小组 + 权重，默认均分）→ 附件上传 |
-| 任务详情 | /tasks/:id | 信息 + 附件 + 成员进度列表（权重标注）+ 汇报区（查看/提交/审核按钮按角色）+ 评论区 |
-| 待我审核 | /reports/pending | 汇报卡片列表，通过/驳回对话框 |
+| 任务详情 | /tasks/:id | 信息 + 附件 + 成员进度列表（权重标注）+ 汇报区（查看/提交/审核按钮按角色，**每条汇报展示审核详情**：审核人/审核内容/审核时间/最终进度；**每条汇报下带评论/回复区**）+ 任务评论区 |
+| 待我审核 | /reports/pending | 汇报卡片列表，审核对话框：**可手动调整最终进度 + 填写审核内容**；驳回时审核内容必填 |
 | 小组管理 | /groups | 组长：建组、改组成员；管理员全部可管 |
 | 用户管理 | /users | 管理员：增删改、角色分配、重置密码 |
 
@@ -252,7 +268,7 @@
 - 后端 JUnit 5 单测：进度加权计算、审核流转、权限校验、进度单调递增约束
 - 关键接口集成测试：创建小组任务（均分/手动权重）→ 汇报 → 审核 → 整体进度 → 完成；个人任务闭环
 - 前端：人工冒烟验收
-- **验收闭环**：管理员建小组 → 组长建任务（设权重）→ 组员汇报 → 组长审核 → 进度变化 → 全员 100% → 任务 DONE
+- **验收闭环**：管理员建小组 → 组长建任务（设权重）→ 组员汇报 → 组长审核（手动调进度/驳回留理由）→ 进度变化 → 员工查看审核详情 → 第三方仅见通过的汇报并可评论/回复 → 全员 100% → 任务 DONE
 
 ## 8. 种子数据
 
