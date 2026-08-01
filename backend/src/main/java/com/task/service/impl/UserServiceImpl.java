@@ -60,7 +60,13 @@ public class UserServiceImpl implements UserService {
         u.setUsername(req.getUsername());
         u.setPassword(encoder.encode(req.getPassword()));
         u.setRealName(req.getRealName());
-        u.setRole(Role.from(req.getRole()));
+        Role role;
+        try {
+            role = Role.from(req.getRole());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException("角色不合法");
+        }
+        u.setRole(role);
         u.setGroupId(req.getGroupId());
         userMapper.insert(u);
         return u.getId();
@@ -72,7 +78,13 @@ public class UserServiceImpl implements UserService {
         SysUser u = userMapper.selectById(id);
         if (u == null) throw new BusinessException("用户不存在");
         u.setRealName(req.getRealName());
-        u.setRole(Role.from(req.getRole()));
+        Role role;
+        try {
+            role = Role.from(req.getRole());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException("角色不合法");
+        }
+        u.setRole(role);
         u.setGroupId(req.getGroupId());
         userMapper.updateById(u);
     }
