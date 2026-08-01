@@ -23,8 +23,8 @@ mybatis-plus:
 minio:
   endpoint: http://127.0.0.1:9000
   public-url: http://127.0.0.1:9000
-  access-key: minioadmin
-  secret-key: minioadmin
+  access-key: admin
+  secret-key: admin123456
   bucket: task-attachments
 jwt:
   secret: TaskAssignSystemSecretKey0123456789abcdefghijklmnopqrstuvwxyz
