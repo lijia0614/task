@@ -83,7 +83,12 @@ public class TaskServiceImpl implements TaskService {
         task.setProgress(0);
 
         List<SysUser> assignees;
-        AssignType assignType = AssignType.from(req.getAssignType());
+        AssignType assignType;
+        try {
+            assignType = AssignType.from(req.getAssignType());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException("分配类型不合法");
+        }
         if (assignType == AssignType.INDIVIDUAL) {
             SysUser u = userMapper.selectById(req.getAssigneeId());
             if (u == null) throw new BusinessException("用户不存在");
