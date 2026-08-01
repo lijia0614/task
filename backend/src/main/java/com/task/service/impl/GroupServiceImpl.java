@@ -6,9 +6,13 @@ import com.task.common.BusinessException;
 import com.task.dto.GroupRequest;
 import com.task.entity.SysGroup;
 import com.task.entity.SysUser;
+import com.task.entity.Task;
+import com.task.enums.AssignType;
 import com.task.enums.Role;
+import com.task.enums.TaskStatus;
 import com.task.mapper.SysGroupMapper;
 import com.task.mapper.SysUserMapper;
+import com.task.mapper.TaskMapper;
 import com.task.service.GroupService;
 import com.task.vo.UserVO;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +28,7 @@ import java.util.stream.Collectors;
 public class GroupServiceImpl implements GroupService {
     private final SysGroupMapper groupMapper;
     private final SysUserMapper userMapper;
+    private final TaskMapper taskMapper;
 
     /** 组长只能管理自己的组；管理员任意。非组长/管理员仅可读。 */
     private SysGroup requireManageable(SysGroup g) {
@@ -99,6 +104,13 @@ public class GroupServiceImpl implements GroupService {
         SysGroup g = groupMapper.selectById(id);
         if (g == null) throw new BusinessException("小组不存在");
         requireManageable(g);
+        // 规格：组内有未完成任务者拒绝删除
+        if (taskMapper.selectCount(new LambdaQueryWrapper<Task>()
+                .eq(Task::getAssigneeId, id)
+                .eq(Task::getAssignType, AssignType.GROUP)
+                .eq(Task::getStatus, TaskStatus.DOING)) > 0) {
+            throw new BusinessException("组内有未完成任务，无法删除");
+        }
         groupMapper.deleteById(id);
     }
 

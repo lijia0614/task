@@ -7,9 +7,11 @@ import com.task.common.BusinessException;
 import com.task.dto.UserRequest;
 import com.task.entity.SysGroup;
 import com.task.entity.SysUser;
+import com.task.entity.TaskMember;
 import com.task.enums.Role;
 import com.task.mapper.SysGroupMapper;
 import com.task.mapper.SysUserMapper;
+import com.task.mapper.TaskMemberMapper;
 import com.task.service.UserService;
 import com.task.vo.UserVO;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,7 @@ import java.util.stream.Collectors;
 public class UserServiceImpl implements UserService {
     private final SysUserMapper userMapper;
     private final SysGroupMapper groupMapper;
+    private final TaskMemberMapper memberMapper;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     private void requireAdmin() {
@@ -35,6 +38,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Page<UserVO> list(long page, long size, String keyword, String role) {
+        if (page < 1 || size < 1 || size > 100) throw new BusinessException("分页参数不合法");
         LambdaQueryWrapper<SysUser> qw = new LambdaQueryWrapper<SysUser>()
                 .like(StringUtils.hasText(keyword), SysUser::getRealName, keyword)
                 .eq(StringUtils.hasText(role), SysUser::getRole, role)
@@ -95,6 +99,11 @@ public class UserServiceImpl implements UserService {
         SysUser u = userMapper.selectById(id);
         if (u == null) throw new BusinessException("用户不存在");
         if (id.equals(UserContext.get().getId())) throw new BusinessException("不能删除自己");
+        // 规格：有任务成员记录者拒绝删除
+        if (memberMapper.selectCount(new LambdaQueryWrapper<TaskMember>()
+                .eq(TaskMember::getUserId, id)) > 0) {
+            throw new BusinessException("该用户有任务记录，无法删除");
+        }
         userMapper.deleteById(id);
     }
 
