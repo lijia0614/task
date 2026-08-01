@@ -1,10 +1,22 @@
 import { defineStore } from 'pinia'
 import { login as loginApi } from '../api/auth'
 
+/** 安全解析 localStorage.user：损坏的 JSON 返回 null 并清除，不抛异常 */
+function loadUser() {
+  const raw = localStorage.getItem('user')
+  if (!raw) return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    localStorage.removeItem('user')
+    return null
+  }
+}
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: localStorage.getItem('token') || '',
-    user: JSON.parse(localStorage.getItem('user') || 'null')
+    user: loadUser()
   }),
   getters: {
     isAdmin: s => s.user?.role === 'ADMIN',

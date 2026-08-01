@@ -62,12 +62,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* 工作台内容区块：白底 + 细边框 + 小圆角（替代卡片堆叠） */
+/* 工作台内容区块：白底无框全宽布局（不悬浮；仅登录面板等特殊场景单独保留边框/阴影） */
 .section {
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
   padding: 16px;
 }
 

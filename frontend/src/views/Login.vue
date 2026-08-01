@@ -69,6 +69,8 @@ const submit = async () => {
   width: 360px;
   max-width: calc(100vw - 32px);
   padding: 28px 24px;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
 }
 
 .login-brand {

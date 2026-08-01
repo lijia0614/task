@@ -18,7 +18,9 @@
     <div class="main">
       <header class="topbar">
         <!-- 手机端：菜单按钮 -->
-        <el-button v-if="!isDesktop" class="menu-btn" text :icon="Menu" @click="drawerOpen = true" />
+        <el-button v-if="!isDesktop" class="menu-btn" text :icon="Menu"
+                   aria-label="打开导航菜单" title="打开导航菜单"
+                   @click="drawerOpen = true" />
         <div class="topbar-title">{{ $route.meta.title || pageTitle }}</div>
         <div class="topbar-right">
           <el-dropdown @command="handleCommand">
@@ -92,6 +94,7 @@ const handleCommand = (cmd) => {
 .layout {
   display: flex;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -108,7 +111,7 @@ const handleCommand = (cmd) => {
   color: #ffffff;
   font-size: 16px;
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -166,6 +169,10 @@ const handleCommand = (cmd) => {
 .user-name {
   font-weight: 500;
   color: var(--color-text);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .content {
@@ -183,6 +190,10 @@ const handleCommand = (cmd) => {
 @media (max-width: 767px) {
   .content {
     padding: 12px;
+  }
+
+  .user-name {
+    max-width: 72px;
   }
 }
 </style>

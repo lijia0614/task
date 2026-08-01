@@ -6,7 +6,7 @@
         创建任务
       </el-button>
     </div>
-    <el-empty description="任务列表开发中（Task 12 实现）" :image-size="80" />
+    <el-empty description="暂无任务" :image-size="80" />
   </div>
 </template>
 
