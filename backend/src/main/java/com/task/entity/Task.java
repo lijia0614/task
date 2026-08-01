@@ -3,6 +3,8 @@ package com.task.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.task.enums.AssignType;
+import com.task.enums.TaskStatus;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -15,9 +17,9 @@ public class Task {
     private String name;
     private String description;
     private Long creatorId;
-    private String assignType;   // INDIVIDUAL / GROUP
+    private AssignType assignType;
     private Long assigneeId;
-    private String status;       // DOING / DONE
+    private TaskStatus status;
     private LocalDateTime deadline;
     private Integer progress;
     private Integer deleted;

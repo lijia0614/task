@@ -2,6 +2,7 @@ package com.task.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.task.TaskApplication;
+import com.task.enums.Role;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -32,7 +33,7 @@ class UserControllerTest {
         String token = login("zhangsan", "123456");
         mvc.perform(post("/api/users").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"x\",\"password\":\"123456\",\"realName\":\"X\",\"role\":\"EMPLOYEE\"}"))
+                        .content("{\"username\":\"x\",\"password\":\"123456\",\"realName\":\"X\",\"role\":\"" + Role.EMPLOYEE.getValue() + "\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(403));
     }
@@ -44,7 +45,7 @@ class UserControllerTest {
         String username = "testuser" + System.currentTimeMillis();
         mvc.perform(post("/api/users").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"" + username + "\",\"password\":\"123456\",\"realName\":\"测试\",\"role\":\"EMPLOYEE\",\"groupId\":null}"))
+                        .content("{\"username\":\"" + username + "\",\"password\":\"123456\",\"realName\":\"测试\",\"role\":\"" + Role.EMPLOYEE.getValue() + "\",\"groupId\":null}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));
     }

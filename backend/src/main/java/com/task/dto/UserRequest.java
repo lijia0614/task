@@ -1,5 +1,6 @@
 package com.task.dto;
 
+import com.task.enums.Role;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
@@ -11,6 +12,6 @@ public class UserRequest {
     private String password;
     @NotBlank(message = "姓名不能为空")
     private String realName;
-    private String role = "EMPLOYEE";
+    private String role = Role.EMPLOYEE.getValue();
     private Long groupId;
 }

@@ -3,6 +3,7 @@ package com.task.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.task.enums.ReportStatus;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -17,7 +18,7 @@ public class Report {
     private String content;
     private Integer progress;
     private Integer finalProgress;
-    private String status;       // PENDING / APPROVED / REJECTED
+    private ReportStatus status;
     private Long reviewerId;
     private String reviewComment;
     private LocalDateTime reviewedAt;

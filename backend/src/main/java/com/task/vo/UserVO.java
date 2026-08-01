@@ -17,7 +17,7 @@ public class UserVO {
         vo.setId(u.getId());
         vo.setUsername(u.getUsername());
         vo.setRealName(u.getRealName());
-        vo.setRole(u.getRole());
+        vo.setRole(u.getRole() == null ? null : u.getRole().name());
         vo.setGroupId(u.getGroupId());
         vo.setGroupName(groupName);
         return vo;

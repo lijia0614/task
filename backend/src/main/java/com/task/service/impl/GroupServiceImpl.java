@@ -6,6 +6,7 @@ import com.task.common.BusinessException;
 import com.task.dto.GroupRequest;
 import com.task.entity.SysGroup;
 import com.task.entity.SysUser;
+import com.task.enums.Role;
 import com.task.mapper.SysGroupMapper;
 import com.task.mapper.SysUserMapper;
 import com.task.service.GroupService;
@@ -27,8 +28,8 @@ public class GroupServiceImpl implements GroupService {
     /** 组长只能管理自己的组；管理员任意。非组长/管理员仅可读。 */
     private SysGroup requireManageable(SysGroup g) {
         SysUser cur = UserContext.get();
-        if ("ADMIN".equals(cur.getRole())) return g;
-        if ("LEADER".equals(cur.getRole()) && cur.getId().equals(g.getLeaderId())) return g;
+        if (cur.getRole() == Role.ADMIN) return g;
+        if (cur.getRole() == Role.LEADER && cur.getId().equals(g.getLeaderId())) return g;
         throw new BusinessException(403, "无权管理该小组");
     }
 
@@ -62,7 +63,7 @@ public class GroupServiceImpl implements GroupService {
     @Override
     public Long create(GroupRequest req) {
         SysUser cur = UserContext.get();
-        if (!"ADMIN".equals(cur.getRole()) && !"LEADER".equals(cur.getRole())) {
+        if (cur.getRole() != Role.ADMIN && cur.getRole() != Role.LEADER) {
             throw new BusinessException(403, "无权操作");
         }
         if (groupMapper.selectCount(new LambdaQueryWrapper<SysGroup>()

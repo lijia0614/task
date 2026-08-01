@@ -3,6 +3,7 @@ package com.task.config;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.task.entity.SysGroup;
 import com.task.entity.SysUser;
+import com.task.enums.Role;
 import com.task.mapper.SysGroupMapper;
 import com.task.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
@@ -24,9 +25,9 @@ public class DataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         if (userMapper.selectCount(new LambdaQueryWrapper<SysUser>()) > 0) return;
-        SysUser admin = user("admin", "admin123", "系统管理员", "ADMIN", null);
+        SysUser admin = user("admin", "admin123", "系统管理员", Role.ADMIN, null);
         userMapper.insert(admin);
-        SysUser leader = user("leader1", "123456", "李组长", "LEADER", null);
+        SysUser leader = user("leader1", "123456", "李组长", Role.LEADER, null);
         userMapper.insert(leader);
         SysGroup g1 = new SysGroup();
         g1.setName("研发一组");
@@ -35,13 +36,13 @@ public class DataInitializer implements CommandLineRunner {
         groupMapper.insert(g1);
         leader.setGroupId(g1.getId());
         userMapper.updateById(leader);
-        userMapper.insert(user("zhangsan", "123456", "张三", "EMPLOYEE", g1.getId()));
-        userMapper.insert(user("lisi", "123456", "李四", "EMPLOYEE", g1.getId()));
-        userMapper.insert(user("wangwu", "123456", "王五", "EMPLOYEE", g1.getId()));
+        userMapper.insert(user("zhangsan", "123456", "张三", Role.EMPLOYEE, g1.getId()));
+        userMapper.insert(user("lisi", "123456", "李四", Role.EMPLOYEE, g1.getId()));
+        userMapper.insert(user("wangwu", "123456", "王五", Role.EMPLOYEE, g1.getId()));
         log.info("种子数据初始化完成");
     }
 
-    private SysUser user(String username, String pwd, String name, String role, Long groupId) {
+    private SysUser user(String username, String pwd, String name, Role role, Long groupId) {
         SysUser u = new SysUser();
         u.setUsername(username);
         u.setPassword(encoder.encode(pwd));

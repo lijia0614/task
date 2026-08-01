@@ -7,6 +7,7 @@ import com.task.common.BusinessException;
 import com.task.dto.UserRequest;
 import com.task.entity.SysGroup;
 import com.task.entity.SysUser;
+import com.task.enums.Role;
 import com.task.mapper.SysGroupMapper;
 import com.task.mapper.SysUserMapper;
 import com.task.service.UserService;
@@ -27,7 +28,7 @@ public class UserServiceImpl implements UserService {
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     private void requireAdmin() {
-        if (!"ADMIN".equals(UserContext.get().getRole())) {
+        if (UserContext.get().getRole() != Role.ADMIN) {
             throw new BusinessException(403, "无权操作");
         }
     }
@@ -59,7 +60,7 @@ public class UserServiceImpl implements UserService {
         u.setUsername(req.getUsername());
         u.setPassword(encoder.encode(req.getPassword()));
         u.setRealName(req.getRealName());
-        u.setRole(req.getRole());
+        u.setRole(Role.from(req.getRole()));
         u.setGroupId(req.getGroupId());
         userMapper.insert(u);
         return u.getId();
@@ -71,7 +72,7 @@ public class UserServiceImpl implements UserService {
         SysUser u = userMapper.selectById(id);
         if (u == null) throw new BusinessException("用户不存在");
         u.setRealName(req.getRealName());
-        u.setRole(req.getRole());
+        u.setRole(Role.from(req.getRole()));
         u.setGroupId(req.getGroupId());
         userMapper.updateById(u);
     }

@@ -3,6 +3,7 @@ package com.task.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.task.enums.Role;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -15,7 +16,7 @@ public class SysUser {
     private String username;
     private String password;
     private String realName;
-    private String role;      // EMPLOYEE / LEADER / ADMIN
+    private Role role;
     private Long groupId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

@@ -1,5 +1,6 @@
 package com.task.auth;
 
+import com.task.enums.Role;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -9,10 +10,10 @@ class JwtUtilTest {
 
     @Test
     void generateAndParse() {
-        String token = jwtUtil.generate(42L, "admin", "ADMIN");
+        String token = jwtUtil.generate(42L, "admin", Role.ADMIN.name());
         assertEquals(42L, jwtUtil.parseUserId(token));
         assertEquals("admin", jwtUtil.parseUsername(token));
-        assertEquals("ADMIN", jwtUtil.parseRole(token));
+        assertEquals(Role.ADMIN.name(), jwtUtil.parseRole(token));
     }
 
     @Test

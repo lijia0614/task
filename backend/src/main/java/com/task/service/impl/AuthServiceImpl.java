@@ -31,7 +31,7 @@ public class AuthServiceImpl implements AuthService {
         if (user == null || !encoder.matches(req.getPassword(), user.getPassword())) {
             throw new BusinessException("用户名或密码错误");
         }
-        String token = jwtUtil.generate(user.getId(), user.getUsername(), user.getRole());
+        String token = jwtUtil.generate(user.getId(), user.getUsername(), user.getRole().name());
         return new LoginResponse(token, UserVO.from(user, groupName(user)));
     }
 

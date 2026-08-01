@@ -5,6 +5,10 @@ import com.task.auth.UserContext;
 import com.task.common.BusinessException;
 import com.task.dto.CreateTaskRequest;
 import com.task.entity.*;
+import com.task.enums.AssignType;
+import com.task.enums.ReportStatus;
+import com.task.enums.Role;
+import com.task.enums.TaskStatus;
 import com.task.mapper.*;
 import com.task.service.TaskService;
 import com.task.vo.AttachmentVO;
@@ -59,14 +63,14 @@ public class TaskServiceImpl implements TaskService {
     }
 
     private boolean canManage(Task t, SysUser cur) {
-        return "ADMIN".equals(cur.getRole()) || t.getCreatorId().equals(cur.getId());
+        return cur.getRole() == Role.ADMIN || t.getCreatorId().equals(cur.getId());
     }
 
     @Override
     @Transactional
     public Long create(CreateTaskRequest req) {
         SysUser creator = UserContext.get();
-        if (!"ADMIN".equals(creator.getRole()) && !"LEADER".equals(creator.getRole())) {
+        if (creator.getRole() != Role.ADMIN && creator.getRole() != Role.LEADER) {
             throw new BusinessException(403, "无权创建任务");
         }
         Task task = new Task();
@@ -75,19 +79,20 @@ public class TaskServiceImpl implements TaskService {
         task.setCreatorId(creator.getId());
         task.setAssigneeId(req.getAssigneeId());
         task.setDeadline(req.getDeadline());
-        task.setStatus("DOING");
+        task.setStatus(TaskStatus.DOING);
         task.setProgress(0);
 
         List<SysUser> assignees;
-        if ("INDIVIDUAL".equals(req.getAssignType())) {
+        AssignType assignType = AssignType.from(req.getAssignType());
+        if (assignType == AssignType.INDIVIDUAL) {
             SysUser u = userMapper.selectById(req.getAssigneeId());
             if (u == null) throw new BusinessException("用户不存在");
-            task.setAssignType("INDIVIDUAL");
+            task.setAssignType(AssignType.INDIVIDUAL);
             assignees = List.of(u);
-        } else if ("GROUP".equals(req.getAssignType())) {
+        } else if (assignType == AssignType.GROUP) {
             SysGroup g = groupMapper.selectById(req.getAssigneeId());
             if (g == null) throw new BusinessException("小组不存在");
-            task.setAssignType("GROUP");
+            task.setAssignType(AssignType.GROUP);
             assignees = userMapper.selectList(new LambdaQueryWrapper<SysUser>()
                     .eq(SysUser::getGroupId, g.getId()));
             if (assignees.isEmpty()) throw new BusinessException("小组没有成员");
@@ -171,7 +176,7 @@ public class TaskServiceImpl implements TaskService {
         if (!memberIds.isEmpty()) {
             Long pending = reportMapper.selectCount(new LambdaQueryWrapper<Report>()
                     .in(Report::getTaskMemberId, memberIds)
-                    .eq(Report::getStatus, "PENDING"));
+                    .eq(Report::getStatus, ReportStatus.PENDING));
             if (pending > 0) throw new BusinessException("存在待审核汇报，无法删除");
         }
         taskMapper.deleteById(id); // 逻辑删除
@@ -211,16 +216,16 @@ public class TaskServiceImpl implements TaskService {
         vo.setCreatorId(t.getCreatorId());
         SysUser creator = userMapper.selectById(t.getCreatorId());
         vo.setCreatorName(creator == null ? null : creator.getRealName());
-        vo.setAssignType(t.getAssignType());
+        vo.setAssignType(t.getAssignType() == null ? null : t.getAssignType().name());
         vo.setAssigneeId(t.getAssigneeId());
-        if ("INDIVIDUAL".equals(t.getAssignType())) {
+        if (t.getAssignType() == AssignType.INDIVIDUAL) {
             SysUser u = userMapper.selectById(t.getAssigneeId());
             vo.setAssigneeName(u == null ? null : u.getRealName());
         } else {
             SysGroup g = groupMapper.selectById(t.getAssigneeId());
             vo.setAssigneeName(g == null ? null : g.getName());
         }
-        vo.setStatus(t.getStatus());
+        vo.setStatus(t.getStatus() == null ? null : t.getStatus().name());
         vo.setDeadline(t.getDeadline());
         vo.setProgress(t.getProgress());
         vo.setDoneAt(t.getDoneAt());
