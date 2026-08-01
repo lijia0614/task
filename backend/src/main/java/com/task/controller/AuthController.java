@@ -34,16 +34,20 @@ public class AuthController {
             throw new BusinessException("用户名或密码错误");
         }
         String token = jwtUtil.generate(user.getId(), user.getUsername(), user.getRole());
-        String groupName = user.getGroupId() == null ? null
-                : groupMapper.selectById(user.getGroupId()).getName();
+        String groupName = groupName(user);
         return Result.ok(new LoginResponse(token, UserVO.from(user, groupName)));
     }
 
     @GetMapping("/me")
     public Result<UserVO> me() {
         SysUser u = UserContext.get();
-        String groupName = u.getGroupId() == null ? null
-                : groupMapper.selectById(u.getGroupId()).getName();
-        return Result.ok(UserVO.from(u, groupName));
+        return Result.ok(UserVO.from(u, groupName(u)));
+    }
+
+    /** 空安全的小组名解析：用户无组或组记录缺失时返回 null。 */
+    private String groupName(SysUser u) {
+        if (u.getGroupId() == null) return null;
+        SysGroup g = groupMapper.selectById(u.getGroupId());
+        return g == null ? null : g.getName();
     }
 }

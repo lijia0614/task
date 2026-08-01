@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Component
@@ -20,6 +21,7 @@ public class DataInitializer implements CommandLineRunner {
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     @Override
+    @Transactional
     public void run(String... args) {
         if (userMapper.selectCount(new LambdaQueryWrapper<SysUser>()) > 0) return;
         SysUser admin = user("admin", "admin123", "系统管理员", "ADMIN", null);
