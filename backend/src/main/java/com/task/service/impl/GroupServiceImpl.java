@@ -59,8 +59,10 @@ public class GroupServiceImpl implements GroupService {
     public List<UserVO> members(Long id) {
         SysGroup g = groupMapper.selectById(id);
         if (g == null) throw new BusinessException("小组不存在");
+        // 与任务创建时组员查询同一顺序（id 升序），保证权重数组映射一致
         List<SysUser> users = userMapper.selectList(new LambdaQueryWrapper<SysUser>()
-                .eq(SysUser::getGroupId, id));
+                .eq(SysUser::getGroupId, id)
+                .orderByAsc(SysUser::getId));
         return users.stream().map(u -> UserVO.from(u, g.getName()))
                 .collect(Collectors.toList());
     }

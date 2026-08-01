@@ -98,29 +98,32 @@ public class TaskServiceImpl implements TaskService {
             SysGroup g = groupMapper.selectById(req.getAssigneeId());
             if (g == null) throw new BusinessException("小组不存在");
             task.setAssignType(AssignType.GROUP);
+            // 权重数组按组员 id 升序映射，查询必须显式排序保证稳定
             assignees = userMapper.selectList(new LambdaQueryWrapper<SysUser>()
-                    .eq(SysUser::getGroupId, g.getId()));
+                    .eq(SysUser::getGroupId, g.getId())
+                    .orderByAsc(SysUser::getId));
             if (assignees.isEmpty()) throw new BusinessException("小组没有成员");
         } else {
             throw new BusinessException("分配类型不合法");
         }
         taskMapper.insert(task);
 
-        // 权重规则：手动 weights 仅对小组任务生效；数量匹配时每项 >0 且 <=100、总和 =100
-        // 个人任务忽略 weights（固定 weight=100）
+        // 权重规则：weights 为 null 时默认均分；GROUP 显式传 weights 必须数量与成员数一致、
+        // 每项 >0 且 <=100、总和 =100（不允许静默回退）；个人任务忽略 weights（固定 weight=100）
         List<Integer> weights;
-        if (req.getWeights() != null && req.getWeights().size() == assignees.size()) {
-            if (assignType == AssignType.GROUP) {
-                int sum = 0;
-                for (Integer w : req.getWeights()) {
-                    if (w == null || w <= 0 || w > 100) throw new BusinessException("权重必须为 1-100 的整数");
-                    sum += w;
-                }
-                if (sum != 100) throw new BusinessException("权重总和必须为 100");
-                weights = req.getWeights();
-            } else {
-                weights = splitWeights(assignees.size());
+        if (req.getWeights() == null) {
+            weights = splitWeights(assignees.size());
+        } else if (assignType == AssignType.GROUP) {
+            if (req.getWeights().size() != assignees.size()) {
+                throw new BusinessException("权重数量与成员数不一致");
             }
+            int sum = 0;
+            for (Integer w : req.getWeights()) {
+                if (w == null || w <= 0 || w > 100) throw new BusinessException("权重必须为 1-100 的整数");
+                sum += w;
+            }
+            if (sum != 100) throw new BusinessException("权重总和必须为 100");
+            weights = req.getWeights();
         } else {
             weights = splitWeights(assignees.size());
         }

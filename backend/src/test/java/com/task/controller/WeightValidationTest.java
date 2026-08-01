@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
@@ -169,5 +170,37 @@ class WeightValidationTest {
         long userId = groupMemberId(groupId);
         String leaderToken = login("leader1", "123456");
         createTaskAndTrack(leaderToken, AssignType.INDIVIDUAL.getValue(), userId, "[0]");
+    }
+
+    /** 契约：GROUP 显式传 weights 但数量与成员数不一致 → 400（不允许静默回退均分） */
+    @Test
+    void groupTaskWeightsCountMismatchRejected() throws Exception {
+        long groupId = createGroup(3);
+        String leaderToken = login("leader1", "123456");
+        mvc.perform(post("/api/tasks").header("Authorization", "Bearer " + leaderToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"权重测试任务-x\",\"assignType\":\"GROUP\",\"assigneeId\":" + groupId + ",\"weights\":[60,40]}"))
+                .andExpect(jsonPath("$.code").value(400));
+    }
+
+    /** 契约：权重数组按组员 id 升序映射——[60,40] 对应升序 id 的第一人 60、第二人 40 */
+    @Test
+    void groupWeightsMapToAscendingUserId() throws Exception {
+        long groupId = createGroup(2);
+        String leaderToken = login("leader1", "123456");
+        String body = mvc.perform(post("/api/tasks").header("Authorization", "Bearer " + leaderToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"权重顺序测试任务-" + System.currentTimeMillis() + "\",\"assignType\":\"GROUP\",\"assigneeId\":" + groupId + ",\"weights\":[60,40]}"))
+                .andExpect(jsonPath("$.code").value(0))
+                .andReturn().getResponse().getContentAsString();
+        long taskId = Long.parseLong(body.replaceAll(".*\"data\":(\\d+).*", "$1"));
+        createdTaskIds.add(taskId);
+        List<TaskMember> members = memberMapper.selectList(new LambdaQueryWrapper<TaskMember>()
+                .eq(TaskMember::getTaskId, taskId)
+                .orderByAsc(TaskMember::getUserId));
+        for (TaskMember tm : members) createdMemberIds.add(tm.getId());
+        assertEquals(2, members.size());
+        assertEquals(60, members.get(0).getWeight(), "id 最小的成员应拿到 weights[0]=60");
+        assertEquals(40, members.get(1).getWeight(), "id 次小的成员应拿到 weights[1]=40");
     }
 }
