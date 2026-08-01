@@ -1,0 +1,13 @@
+import request from './request'
+
+export const listTasks = (params) => request.get('/tasks', { params })
+export const getTask = (id) => request.get(`/tasks/${id}`)
+export const createTask = (data) => request.post('/tasks', data)
+export const updateTask = (id, data) => request.put(`/tasks/${id}`, data)
+export const deleteTask = (id) => request.delete(`/tasks/${id}`)
+export const updateWeights = (id, weights) => request.put(`/tasks/${id}/weights`, weights)
+export const submitReport = (taskId, data) => request.post(`/tasks/${taskId}/reports`, data)
+export const listReports = (taskId) => request.get(`/tasks/${taskId}/reports`)
+export const pendingReports = () => request.get('/reports/pending')
+export const approveReport = (id, data) => request.post(`/reports/${id}/approve`, data)
+export const rejectReport = (id, data) => request.post(`/reports/${id}/reject`, data)
