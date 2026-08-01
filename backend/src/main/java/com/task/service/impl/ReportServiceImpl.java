@@ -4,8 +4,11 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.task.auth.UserContext;
 import com.task.common.BusinessException;
 import com.task.dto.ReportRequest;
+import com.task.dto.ReviewRequest;
 import com.task.entity.*;
 import com.task.enums.ReportStatus;
+import com.task.enums.Role;
+import com.task.enums.TaskStatus;
 import com.task.mapper.*;
 import com.task.service.ReportService;
 import com.task.vo.ReportVO;
@@ -13,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -75,10 +79,104 @@ public class ReportServiceImpl implements ReportService {
                 .collect(Collectors.toList());
     }
 
+    /** 是否所有成员进度都达到 100 */
+    public static boolean isAllCompleted(List<Integer> progresses) {
+        return !progresses.isEmpty() && progresses.stream().allMatch(p -> p >= 100);
+    }
+
+    @Override
+    @Transactional
+    public void approve(Long reportId, ReviewRequest req) {
+        // 先加载数据并校验权限，再做状态/参数校验：未授权用户不得通过错误文案获知汇报状态
+        Report report = reportMapper.selectById(reportId);
+        if (report == null) throw new BusinessException("汇报不存在");
+        TaskMember member = memberMapper.selectById(report.getTaskMemberId());
+        Task task = taskMapper.selectById(member.getTaskId());
+        SysUser reviewer = UserContext.get();
+        if (reviewer.getRole() != Role.ADMIN && !task.getCreatorId().equals(reviewer.getId())) {
+            throw new BusinessException(403, "无权审核该汇报");
+        }
+        if (report.getStatus() != ReportStatus.PENDING) throw new BusinessException("该汇报已审核");
+
+        int finalProgress = req.getProgress() != null ? req.getProgress() : report.getProgress();
+        if (finalProgress > 100) throw new BusinessException("最终进度不能超过 100");
+        if (finalProgress < member.getProgress()) throw new BusinessException("最终进度不能低于当前进度");
+
+        report.setStatus(ReportStatus.APPROVED);
+        report.setFinalProgress(finalProgress);
+        report.setReviewerId(reviewer.getId());
+        report.setReviewComment(req.getReviewComment());
+        report.setReviewedAt(LocalDateTime.now());
+        reportMapper.updateById(report);
+
+        member.setProgress(finalProgress);
+        memberMapper.updateById(member);
+
+        // 重算整体进度与完成状态
+        List<TaskMember> members = memberMapper.selectList(new LambdaQueryWrapper<TaskMember>()
+                .eq(TaskMember::getTaskId, task.getId()));
+        List<Integer> weights = members.stream().map(TaskMember::getWeight).collect(Collectors.toList());
+        List<Integer> progresses = members.stream().map(TaskMember::getProgress).collect(Collectors.toList());
+        task.setProgress(TaskServiceImpl.calcOverallProgress(weights, progresses));
+        if (isAllCompleted(progresses)) {
+            task.setStatus(TaskStatus.DONE);
+            task.setDoneAt(LocalDateTime.now());
+        }
+        taskMapper.updateById(task);
+    }
+
+    @Override
+    @Transactional
+    public void reject(Long reportId, ReviewRequest req) {
+        // 先加载数据并校验权限，再做状态/参数校验：未授权用户不得通过错误文案获知汇报状态
+        Report report = reportMapper.selectById(reportId);
+        if (report == null) throw new BusinessException("汇报不存在");
+        TaskMember member = memberMapper.selectById(report.getTaskMemberId());
+        Task task = taskMapper.selectById(member.getTaskId());
+        SysUser reviewer = UserContext.get();
+        if (reviewer.getRole() != Role.ADMIN && !task.getCreatorId().equals(reviewer.getId())) {
+            throw new BusinessException(403, "无权审核该汇报");
+        }
+        if (req.getReviewComment() == null || req.getReviewComment().isBlank()) {
+            throw new BusinessException("驳回必须填写审核内容（不通过的理由）");
+        }
+        if (report.getStatus() != ReportStatus.PENDING) throw new BusinessException("该汇报已审核");
+
+        report.setStatus(ReportStatus.REJECTED);
+        report.setReviewerId(reviewer.getId());
+        report.setReviewComment(req.getReviewComment());
+        report.setReviewedAt(LocalDateTime.now());
+        reportMapper.updateById(report);
+    }
+
+    @Override
+    public List<ReportVO> pendingList(SysUser current) {
+        LambdaQueryWrapper<Task> taskQw = current.getRole() == Role.ADMIN
+                ? new LambdaQueryWrapper<Task>()
+                : new LambdaQueryWrapper<Task>().eq(Task::getCreatorId, current.getId());
+        List<Long> taskIds = taskMapper.selectList(taskQw).stream().map(Task::getId).collect(Collectors.toList());
+        if (taskIds.isEmpty()) return List.of();
+        List<Long> memberIds = memberMapper.selectList(new LambdaQueryWrapper<TaskMember>()
+                        .in(TaskMember::getTaskId, taskIds))
+                .stream().map(TaskMember::getId).collect(Collectors.toList());
+        if (memberIds.isEmpty()) return List.of();
+        return reportMapper.selectList(new LambdaQueryWrapper<Report>()
+                        .in(Report::getTaskMemberId, memberIds)
+                        .eq(Report::getStatus, ReportStatus.PENDING)
+                        .orderByAsc(Report::getId))
+                .stream().map(this::toVO).collect(Collectors.toList());
+    }
+
     private ReportVO toVO(Report r) {
         ReportVO vo = new ReportVO();
         vo.setId(r.getId());
         vo.setTaskMemberId(r.getTaskMemberId());
+        TaskMember m = memberMapper.selectById(r.getTaskMemberId());
+        if (m != null) {
+            vo.setTaskId(m.getTaskId());
+            Task t = taskMapper.selectById(m.getTaskId());
+            vo.setTaskName(t == null ? null : t.getName());
+        }
         vo.setUserId(r.getUserId());
         SysUser u = userMapper.selectById(r.getUserId());
         vo.setUserName(u == null ? null : u.getRealName());

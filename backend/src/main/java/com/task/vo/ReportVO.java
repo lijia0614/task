@@ -8,6 +8,8 @@ import java.time.LocalDateTime;
 public class ReportVO {
     private Long id;
     private Long taskMemberId;
+    private Long taskId;
+    private String taskName;
     private Long userId;
     private String userName;
     private String content;
