@@ -31,7 +31,7 @@ public class GroupController {
     private SysGroup requireManageable(SysGroup g) {
         SysUser cur = UserContext.get();
         if ("ADMIN".equals(cur.getRole())) return g;
-        if ("LEADER".equals(cur.getRole()) && g.getLeaderId().equals(cur.getId())) return g;
+        if ("LEADER".equals(cur.getRole()) && cur.getId().equals(g.getLeaderId())) return g;
         throw new BusinessException(403, "无权管理该小组");
     }
 
@@ -86,6 +86,11 @@ public class GroupController {
         SysGroup g = groupMapper.selectById(id);
         if (g == null) throw new BusinessException("小组不存在");
         requireManageable(g);
+        if (groupMapper.selectCount(new LambdaQueryWrapper<SysGroup>()
+                .eq(SysGroup::getName, req.getName())
+                .ne(SysGroup::getId, id)) > 0) {
+            throw new BusinessException("组名已存在");
+        }
         g.setName(req.getName());
         g.setLeaderId(req.getLeaderId());
         g.setDescription(req.getDescription());
