@@ -38,7 +38,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Page<UserVO> list(long page, long size, String keyword, String role) {
-        if (page < 1 || size < 1 || size > 100) throw new BusinessException("分页参数不合法");
+        if (page < 1 || size < 1 || size > 1000) throw new BusinessException("分页参数不合法");
         LambdaQueryWrapper<SysUser> qw = new LambdaQueryWrapper<SysUser>()
                 .like(StringUtils.hasText(keyword), SysUser::getRealName, keyword)
                 .eq(StringUtils.hasText(role), SysUser::getRole, role)

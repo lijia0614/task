@@ -106,8 +106,24 @@ public class TaskServiceImpl implements TaskService {
         }
         taskMapper.insert(task);
 
-        List<Integer> weights = req.getWeights() != null && req.getWeights().size() == assignees.size()
-                ? req.getWeights() : splitWeights(assignees.size());
+        // 权重规则：手动 weights 仅对小组任务生效；数量匹配时每项 >0 且 <=100、总和 =100
+        // 个人任务忽略 weights（固定 weight=100）
+        List<Integer> weights;
+        if (req.getWeights() != null && req.getWeights().size() == assignees.size()) {
+            if (assignType == AssignType.GROUP) {
+                int sum = 0;
+                for (Integer w : req.getWeights()) {
+                    if (w == null || w <= 0 || w > 100) throw new BusinessException("权重必须为 1-100 的整数");
+                    sum += w;
+                }
+                if (sum != 100) throw new BusinessException("权重总和必须为 100");
+                weights = req.getWeights();
+            } else {
+                weights = splitWeights(assignees.size());
+            }
+        } else {
+            weights = splitWeights(assignees.size());
+        }
         for (int i = 0; i < assignees.size(); i++) {
             TaskMember m = new TaskMember();
             m.setTaskId(task.getId());

@@ -88,6 +88,8 @@ call POST "$AT" /api/groups "{\"name\":\"smoke组_$TS\",\"leaderId\":$LEADER_ID,
 GID=$(field id); check "POST /groups 创建小组" 0
 call POST "$LT" "/api/groups/$GID/members" "{\"userId\":$SUID}"; check "POST /groups/{id}/members 添加成员" 0
 call GET "$LT" "/api/groups/$GID/members"; check "GET /groups/{id}/members 成员列表" 0
+call DELETE "$LT" "/api/groups/$GID/members/$SUID"; check "DELETE /groups/{id}/members/{userId} 移除成员" 0
+call POST "$LT" "/api/groups/$GID/members" "{\"userId\":$SUID}"; check "POST /groups/{id}/members 重新添加成员" 0
 call PUT "$LT" "/api/groups/$GID" "{\"name\":\"smoke组_$TS\",\"leaderId\":$LEADER_ID,\"description\":\"冒烟小组改\"}"
 check "PUT /groups/{id} 修改小组（组长管自己的组）" 0
 call GET "$WT" "/api/groups"; check "GET /groups 列表（含组长名/成员数）" 0

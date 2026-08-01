@@ -122,7 +122,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.code").value(400));
     }
 
-    /** 分页参数非法（负 size）应返回 400，而不是 500 */
+    /** 分页参数非法应返回 400；契约：size 上限为 1000（前端候选列表用 size=999 拉全量） */
     @Test
     void invalidPagingParamsReturn400() throws Exception {
         String token = login("admin", "admin123");
@@ -133,8 +133,17 @@ class UserControllerTest {
                         .param("page", "0"))
                 .andExpect(jsonPath("$.code").value(400));
         mvc.perform(get("/api/users").header("Authorization", "Bearer " + token)
-                        .param("size", "1000"))
+                        .param("size", "1001"))
                 .andExpect(jsonPath("$.code").value(400));
+    }
+
+    /** 契约：size=999（前端候选列表用法）必须合法 */
+    @Test
+    void pagingSize999Accepted() throws Exception {
+        String token = login("admin", "admin123");
+        mvc.perform(get("/api/users").header("Authorization", "Bearer " + token)
+                        .param("page", "1").param("size", "999"))
+                .andExpect(jsonPath("$.code").value(0));
     }
 
     /** 请求体不是合法 JSON 应返回 400，而不是 500 */
