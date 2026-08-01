@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS report (
   reviewer_id BIGINT NULL,
   review_comment VARCHAR(255) NULL,
   reviewed_at DATETIME NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_report_task_member (task_member_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS task_attachment (
@@ -69,7 +70,8 @@ CREATE TABLE IF NOT EXISTS task_attachment (
   file_url VARCHAR(500) NOT NULL,
   file_size BIGINT NOT NULL,
   uploaded_by BIGINT NOT NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_attachment_task (task_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS comment (
@@ -79,7 +81,8 @@ CREATE TABLE IF NOT EXISTS comment (
   parent_id BIGINT NOT NULL DEFAULT 0,
   user_id BIGINT NOT NULL,
   content TEXT NOT NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_comment_task_report (task_id, report_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS minio_file (
