@@ -89,23 +89,33 @@ class UserControllerTest {
         String token = login("admin", "admin123");
         // 唯一用户名避免重复执行冲突
         String username = "testuser" + System.currentTimeMillis();
-        mvc.perform(post("/api/users").header("Authorization", "Bearer " + token)
+        String body = mvc.perform(post("/api/users").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"" + username + "\",\"password\":\"123456\",\"realName\":\"测试\",\"role\":\"" + Role.EMPLOYEE.getValue() + "\",\"groupId\":null}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0));
+                .andExpect(jsonPath("$.code").value(0))
+                .andReturn().getResponse().getContentAsString();
+        // 记录 id，@AfterEach 清理，避免数据泄漏
+        createdUserIds.add(Long.parseLong(body.replaceAll(".*\"data\":(\\d+).*", "$1")));
     }
 
     /** 规格：删除（有任务成员记录者拒绝） */
     @Test
     void userWithTaskRecordCannotBeDeleted() throws Exception {
         long userId = createEmployee("deletetest" + System.currentTimeMillis());
-        // leader1 建个人任务给该用户，产生 task_member 记录
+        // leader1 建个人任务给该用户，产生 task_member 记录（记录 task/task_member id 供 @AfterEach 清理）
         String leaderToken = login("leader1", "123456");
-        mvc.perform(post("/api/tasks").header("Authorization", "Bearer " + leaderToken)
+        String taskBody = mvc.perform(post("/api/tasks").header("Authorization", "Bearer " + leaderToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"删除测试任务-" + System.currentTimeMillis() + "\",\"assignType\":\"" + AssignType.INDIVIDUAL.getValue() + "\",\"assigneeId\":" + userId + "}"))
-                .andExpect(jsonPath("$.code").value(0));
+                .andExpect(jsonPath("$.code").value(0))
+                .andReturn().getResponse().getContentAsString();
+        long taskId = Long.parseLong(taskBody.replaceAll(".*\"data\":(\\d+).*", "$1"));
+        createdTaskIds.add(taskId);
+        TaskMember tm = memberMapper.selectOne(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<TaskMember>()
+                .eq(TaskMember::getTaskId, taskId)
+                .eq(TaskMember::getUserId, userId));
+        if (tm != null) createdMemberIds.add(tm.getId());
         // admin 删除该用户 → 拒绝
         String adminToken = login("admin", "admin123");
         mvc.perform(delete("/api/users/" + userId).header("Authorization", "Bearer " + adminToken))

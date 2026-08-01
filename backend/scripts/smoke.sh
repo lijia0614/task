@@ -3,10 +3,11 @@
 # 任务分配系统后端接口冒烟脚本（覆盖设计文档 §5 全部接口）
 # 用法: scripts/smoke.sh [BASE_URL]   默认 http://127.0.0.1:8080
 # 特性:
-#   - 可重复执行：所有自建数据带唯一时间戳前缀，不修改种子账号/数据
-#   - 每步断言 code 字段，输出 ✅/❌，结束统计 PASS/FAIL
+#   - 可重复执行：所有自建数据带唯一时间戳前缀（smoke_<TS>），不修改种子账号/数据
+#   - 每步断言 code 字段，输出 [OK]/[FAIL]，结束统计 PASS/FAIL
 #   - 依赖: curl + python3（解析 JSON，macOS 自带）
-# 注意: 脚本会向数据库写入带 smoke_ 前缀的测试数据，不会清理（与种子数据隔离）
+# 注意: 脚本只做接口验证，不执行任何 DELETE/SQL 清理；冒烟产生的
+#       smoke_<TS> 前缀数据保留在库中（与种子数据隔离，互不影响）
 # =============================================================================
 set -u
 BASE_URL="${1:-http://127.0.0.1:8080}"
@@ -45,9 +46,9 @@ check() { # name expect_code
   local c
   c=$(code)
   if [ "$c" = "$2" ]; then
-    echo "  ✅ $1 (code=$c)"; PASS=$((PASS+1))
+    echo "  [OK] $1 (code=$c)"; PASS=$((PASS+1))
   else
-    echo "  ❌ $1 (期望 $2, 实际 $c)  body=$RESP"; FAIL=$((FAIL+1))
+    echo "  [FAIL] $1, 期望 code=$2, 实际 code=$c, body=$RESP"; FAIL=$((FAIL+1))
   fi
 }
 
@@ -127,7 +128,7 @@ check "POST /files/upload 缺 file 参数 → 400" 400
 # ---------- 6. 汇报与审核 ----------
 echo "[6] 汇报与审核"
 ST=$(login "$SU" 654321)   # smoke_user 密码已被重置为 654321
-call POST "$ST" "/api/tasks/$T1/reports" '{"content":"冒烟汇报：编码完成","progress":50}'
+call POST "$ST" "/api/tasks/$T1/reports" '{"content":"冒烟汇报编码完成-$TS","progress":50}'
 R1=$(field id); check "POST /tasks/{id}/reports 提交汇报" 0
 call GET "$LT" /api/reports/pending; check "GET /reports/pending 待我审核" 0
 call POST "$LT" "/api/reports/$R1/approve" '{"progress":60,"reviewComment":"冒烟通过"}'
@@ -135,7 +136,7 @@ check "POST /reports/{id}/approve 通过（手动调进度60）" 0
 call POST "$LT" "/api/reports/$R1/approve" '{}'
 check "POST /reports/{id}/approve 重复审核 → 400" 400
 # 第二条：驳回（理由必填）
-call POST "$ST" "/api/tasks/$T1/reports" '{"content":"冒烟汇报：联调","progress":70}'
+call POST "$ST" "/api/tasks/$T1/reports" '{"content":"冒烟汇报联调-$TS","progress":70}'
 R2=$(field id); check "POST /tasks/{id}/reports 第二次汇报" 0
 call POST "$LT" "/api/reports/$R2/reject" '{}'
 check "POST /reports/{id}/reject 空理由 → 400" 400
@@ -150,23 +151,23 @@ check "POST /tasks/{id}/reports 进度回退 → 400" 400
 
 # ---------- 7. 评论 ----------
 echo "[7] 评论"
-call POST "$WT" "/api/tasks/$T1/comments" '{"content":"冒烟任务评论"}'
+call POST "$WT" "/api/tasks/$T1/comments" '{"content":"冒烟任务评论-$TS"}'
 C1=$(field id); check "POST /tasks/{id}/comments 任务评论" 0
 call GET "$WT" "/api/tasks/$T1/comments"; check "GET /tasks/{id}/comments 任务评论列表" 0
-call POST "$WT" "/api/comments/$C1/reply" '{"content":"冒烟回复"}'
+call POST "$WT" "/api/comments/$C1/reply" '{"content":"冒烟回复-$TS"}'
 check "POST /comments/{id}/reply 回复顶级评论" 0
 # 对 APPROVED 汇报（R1）评论
-call POST "$WT" "/api/reports/$R1/comments" '{"content":"冒烟汇报评论"}'
+call POST "$WT" "/api/reports/$R1/comments" '{"content":"冒烟汇报评论-$TS"}'
 check "POST /reports/{id}/comments 评论 APPROVED 汇报" 0
 call GET "$WT" "/api/reports/$R1/comments"; check "GET /reports/{id}/comments 查看 APPROVED 汇报评论" 0
 # 对 REJECTED 汇报（R2）评论 → 403
-call POST "$WT" "/api/reports/$R2/comments" '{"content":"越权评论"}'
+call POST "$WT" "/api/reports/$R2/comments" '{"content":"越权评论-$TS"}'
 check "POST /reports/{id}/comments 评论 REJECTED 汇报 → 403" 403
 call GET "$WT" "/api/reports/$R2/comments"; check "GET /reports/{id}/comments 查看 REJECTED 汇报评论 → 403" 403
 # 回复不能回复回复
-call POST "$WT" "/api/comments/$C1/reply" '{"content":"第二层冒烟回复"}'
+call POST "$WT" "/api/comments/$C1/reply" '{"content":"第二层冒烟回复-$TS-$TS"}'
 REPLY1=$(field id)
-call POST "$WT" "/api/comments/$REPLY1/reply" '{"content":"第三层"}'
+call POST "$WT" "/api/comments/$REPLY1/reply" '{"content":"第三层-$TS"}'
 check "POST /comments/{id}/reply 回复回复 → 400" 400
 
 # ---------- 8. 删除保护 ----------

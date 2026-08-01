@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.task.TaskApplication;
 import com.task.entity.SysGroup;
 import com.task.entity.SysUser;
+import com.task.entity.TaskMember;
 import com.task.enums.AssignType;
 import com.task.enums.Role;
 import com.task.mapper.SysGroupMapper;
 import com.task.mapper.SysUserMapper;
+import com.task.mapper.TaskMemberMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +37,7 @@ class GroupDeleteTest {
     @Autowired ObjectMapper om;
     @Autowired SysGroupMapper groupMapper;
     @Autowired SysUserMapper userMapper;
+    @Autowired TaskMemberMapper memberMapper;
     @Autowired JdbcTemplate jdbcTemplate;
 
     /** 本用例自建数据 id（按依赖顺序物理清理：task_member → task → sys_group → sys_user） */
@@ -95,11 +98,20 @@ class GroupDeleteTest {
     void groupWithUnfinishedTaskCannotBeDeleted() throws Exception {
         long groupId = createGroupWithMember();
         String leaderToken = login("leader1", "123456");
-        // 建组任务（未完成）
-        mvc.perform(post("/api/tasks").header("Authorization", "Bearer " + leaderToken)
+        // 建组任务（未完成），记录 task/task_member id 供 @AfterEach 清理
+        String taskBody = mvc.perform(post("/api/tasks").header("Authorization", "Bearer " + leaderToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"组删除测试任务-" + System.currentTimeMillis() + "\",\"assignType\":\"" + AssignType.GROUP.getValue() + "\",\"assigneeId\":" + groupId + "}"))
-                .andExpect(jsonPath("$.code").value(0));
+                .andExpect(jsonPath("$.code").value(0))
+                .andReturn().getResponse().getContentAsString();
+        long taskId = Long.parseLong(taskBody.replaceAll(".*\"data\":(\\d+).*", "$1"));
+        createdTaskIds.add(taskId);
+        // 组任务的 task_member 记录（组内成员的）也记录，清理时先删
+        for (TaskMember tm : memberMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<TaskMember>()
+                        .eq(TaskMember::getTaskId, taskId))) {
+            createdMemberIds.add(tm.getId());
+        }
         String adminToken = login("admin", "admin123");
         mvc.perform(delete("/api/groups/" + groupId).header("Authorization", "Bearer " + adminToken))
                 .andExpect(jsonPath("$.code").value(400));
