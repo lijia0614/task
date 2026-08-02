@@ -14,6 +14,9 @@
           <el-option label="进行中" value="DOING" />
           <el-option label="已完成" value="DONE" />
         </el-select>
+        <el-button v-if="auth.canCreateTask" type="primary" :icon="Plus" @click="$router.push('/tasks/create')">
+          创建任务
+        </el-button>
       </div>
     </div>
 
@@ -87,7 +90,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Search, Refresh, User, UserFilled, Avatar, Clock } from '@element-plus/icons-vue'
+import { Search, Refresh, User, UserFilled, Avatar, Clock, Plus } from '@element-plus/icons-vue'
 import { listTasks } from '../api/task'
 import { useAuthStore } from '../store/auth'
 
@@ -100,6 +103,9 @@ const tasks = ref([])
 const loading = ref(false)
 const error = ref('')
 
+/** 请求序号：只有最新一次筛选请求的响应才能更新页面状态，防止旧响应覆盖 */
+let requestSeq = 0
+
 /** 防御：null/超范围进度钳制到 0-100 */
 const safeProgress = (p) => Math.max(0, Math.min(100, p ?? 0))
 
@@ -108,19 +114,23 @@ const deadlineText = (t) => (t.deadline ? String(t.deadline).slice(0, 10) : '未
 const isOverdue = (t) => t.status !== 'DONE' && !!t.deadline && new Date(t.deadline).getTime() < Date.now()
 
 const load = async () => {
+  const seq = ++requestSeq
   loading.value = true
   error.value = ''
   try {
-    tasks.value = await listTasks({
+    const data = await listTasks({
       type: activeTab.value,
       status: status.value || undefined,
       keyword: keyword.value || undefined
     })
+    if (seq !== requestSeq) return // 过期响应丢弃
+    tasks.value = data
   } catch (e) {
+    if (seq !== requestSeq) return // 过期失败也丢弃
     error.value = e.message || '网络错误'
     tasks.value = []
   } finally {
-    loading.value = false
+    if (seq === requestSeq) loading.value = false
   }
 }
 
