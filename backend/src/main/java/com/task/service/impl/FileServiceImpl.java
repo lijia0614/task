@@ -3,13 +3,17 @@ package com.task.service.impl;
 import com.task.auth.UserContext;
 import com.task.common.BusinessException;
 import com.task.entity.MinioFile;
+import com.task.entity.TaskAttachment;
 import com.task.mapper.MinioFileMapper;
+import com.task.mapper.TaskAttachmentMapper;
 import com.task.service.FileService;
+import com.task.service.MinioObjectService;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
@@ -20,6 +24,8 @@ import java.util.UUID;
 public class FileServiceImpl implements FileService {
     private final MinioClient minioClient;
     private final MinioFileMapper fileMapper;
+    private final TaskAttachmentMapper attachmentMapper;
+    private final MinioObjectService minioObjectService;
 
     @Value("${minio.bucket}") private String bucket;
     @Value("${minio.public-url}") private String publicUrl;
@@ -50,10 +56,24 @@ public class FileServiceImpl implements FileService {
         }
     }
 
+    /**
+     * 只允许上传者本人删除；已绑定任务的附件禁止直接删除；
+     * 先删 MinIO 对象成功后再删数据库行，MinIO 失败则整件事务回滚，行保留。
+     */
     @Override
+    @Transactional
     public void delete(Long id) {
-        MinioFile f = fileMapper.selectById(id);
+        MinioFile f = fileMapper.selectByIdForUpdate(id);
         if (f == null) throw new BusinessException("文件不存在");
+        Long currentUserId = UserContext.get().getId();
+        if (!currentUserId.equals(f.getUploaderId())) {
+            throw new BusinessException(403, "只能删除自己上传的文件");
+        }
+        TaskAttachment bound = attachmentMapper.selectByMinioFileId(id);
+        if (bound != null) {
+            throw new BusinessException(400, "文件已绑定任务，不能直接删除");
+        }
+        minioObjectService.delete(f.getObjectName());
         fileMapper.deleteById(id);
     }
 }
