@@ -27,6 +27,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -199,6 +200,24 @@ class TaskDeletionOwnershipTest {
         mvc.perform(delete("/api/tasks/" + taskId).header("Authorization", "Bearer " + token))
                 .andExpect(jsonPath("$.code").value(400));
         assertEquals(0, deletedFlag(taskId), "任务应保留");
+    }
+
+    /** 附件上传者快照与文件记录不一致时拒绝删除，避免清理脏数据 */
+    @Test
+    void mismatchedAttachmentUploaderRejectsDeletion() throws Exception {
+        long leaderId = userId("leader1");
+        long lisiId = userId("lisi");
+        String token = login("leader1", "123456");
+        long taskId = createTask(token, lisiId);
+        long fileId = insertMinioFile("snapshot-mismatch-" + UUID.randomUUID(), leaderId);
+        insertAttachment(taskId, fileId, lisiId);
+
+        mvc.perform(delete("/api/tasks/" + taskId).header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.code").value(400));
+        assertEquals(0, deletedFlag(taskId), "任务应保留");
+        assertEquals(1, count("task_attachment", "task_id", taskId), "脏附件行应保留");
+        assertEquals(1, count("minio_file", "id", fileId), "文件行应保留");
+        verifyNoInteractions(minioClient);
     }
 
     /** MinIO 删除失败：400，任务与附件/minio 行全部保留（不允许部分清理） */

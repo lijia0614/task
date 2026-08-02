@@ -131,6 +131,17 @@ class TaskAttachmentBindingTest {
         assertEquals(0, count("task_attachment", "minio_file_id", 999999L), "不应产生附件绑定");
     }
 
+    /** 附件列表含 null id：400，不能在排序阶段落成 500 */
+    @Test
+    void nullAttachmentIdFailsCreation() throws Exception {
+        String token = login("leader1", "123456");
+        String name = "绑定空 ID-" + UUID.randomUUID();
+        List<Long> ids = new ArrayList<>();
+        ids.add(null);
+        postCreate(token, name, ids, 400);
+        assertEquals(0, count("task", "name", name), "任务不应创建");
+    }
+
     /** 使用他人上传的文件：400，整件事务回滚 */
     @Test
     void otherUploadersFileFailsCreation() throws Exception {
@@ -208,5 +219,9 @@ class TaskAttachmentBindingTest {
         for (Number u : uploaders) {
             assertEquals(leaderId, u.longValue(), "上传者应为真实上传人");
         }
+        assertEquals(2, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM task_attachment ta JOIN minio_file mf ON ta.minio_file_id = mf.id "
+                        + "WHERE ta.task_id = ? AND ta.uploaded_by = mf.uploader_id", Integer.class, taskId),
+                "附件上传者快照应与文件真实上传者一致");
     }
 }

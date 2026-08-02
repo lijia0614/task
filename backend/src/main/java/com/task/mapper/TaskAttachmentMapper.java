@@ -9,4 +9,8 @@ public interface TaskAttachmentMapper extends BaseMapper<TaskAttachment> {
     /** 一个上传文件最多绑定一个任务（uk_attachment_minio_file 保证） */
     @Select("SELECT * FROM task_attachment WHERE minio_file_id = #{fileId} LIMIT 1")
     TaskAttachment selectByMinioFileId(Long fileId);
+
+    /** 当前读并锁定绑定行/唯一索引间隙，避免并发绑定使用过期快照 */
+    @Select("SELECT * FROM task_attachment WHERE minio_file_id = #{fileId} LIMIT 1 FOR UPDATE")
+    TaskAttachment selectByMinioFileIdForUpdate(Long fileId);
 }

@@ -142,6 +142,9 @@ public class TaskServiceImpl implements TaskService {
         // 关联附件：先整体校验（重复/存在/归属/未绑定），任一非法则整个任务创建失败
         if (req.getAttachmentIds() != null && !req.getAttachmentIds().isEmpty()) {
             List<Long> ids = req.getAttachmentIds();
+            if (ids.stream().anyMatch(Objects::isNull)) {
+                throw new BusinessException("附件 ID 不能为空");
+            }
             if (ids.stream().distinct().count() != ids.size()) {
                 throw new BusinessException("附件列表不能重复");
             }
@@ -153,7 +156,7 @@ public class TaskServiceImpl implements TaskService {
                 if (!creator.getId().equals(f.getUploaderId())) {
                     throw new BusinessException("只能使用自己上传的文件");
                 }
-                if (attachmentMapper.selectByMinioFileId(f.getId()) != null) {
+                if (attachmentMapper.selectByMinioFileIdForUpdate(f.getId()) != null) {
                     throw new BusinessException("附件已被其他任务绑定");
                 }
             }
@@ -242,7 +245,9 @@ public class TaskServiceImpl implements TaskService {
             for (TaskAttachment a : attachments) {
                 MinioFile f = byId.get(a.getMinioFileId());
                 if (f == null) throw new BusinessException("附件关联的文件不存在，无法删除");
-                if (!cur.getId().equals(f.getUploaderId())) {
+                if (!cur.getId().equals(f.getUploaderId())
+                        || !cur.getId().equals(a.getUploadedBy())
+                        || !Objects.equals(a.getUploadedBy(), f.getUploaderId())) {
                     throw new BusinessException("附件归属异常，无法删除");
                 }
             }
