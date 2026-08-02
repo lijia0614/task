@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS report (
   content TEXT NOT NULL,
   progress INT NOT NULL,
   final_progress INT NULL,
-  status VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING/APPROVED/REJECTED',
+  status VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING/APPROVED/REJECTED/WITHDRAWN',
   reviewer_id BIGINT NULL,
   review_comment VARCHAR(255) NULL,
   reviewed_at DATETIME NULL,
@@ -66,12 +66,25 @@ CREATE TABLE IF NOT EXISTS report (
 CREATE TABLE IF NOT EXISTS task_attachment (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   task_id BIGINT NOT NULL,
+  minio_file_id BIGINT NULL,
   file_name VARCHAR(255) NOT NULL,
   file_url VARCHAR(500) NOT NULL,
   file_size BIGINT NOT NULL,
   uploaded_by BIGINT NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_attachment_minio_file (minio_file_id),
   KEY idx_attachment_task (task_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS report_history (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  report_id BIGINT NOT NULL,
+  action VARCHAR(20) NOT NULL,
+  content TEXT NOT NULL,
+  progress INT NOT NULL,
+  actor_id BIGINT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_report_history_report (report_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS comment (

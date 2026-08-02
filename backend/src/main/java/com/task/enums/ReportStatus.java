@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.annotation.EnumValue;
 
 /** 汇报状态 */
 public enum ReportStatus {
-    PENDING("PENDING"), APPROVED("APPROVED"), REJECTED("REJECTED");
+    PENDING("PENDING"), APPROVED("APPROVED"), REJECTED("REJECTED"), WITHDRAWN("WITHDRAWN");
 
     @EnumValue
     private final String value;

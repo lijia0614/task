@@ -7,17 +7,17 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/** 汇报状态变化审计记录 */
 @Data
-@TableName("task_attachment")
-public class TaskAttachment {
+@TableName("report_history")
+public class ReportHistory {
     @TableId(type = IdType.AUTO)
     private Long id;
-    private Long taskId;
-    /** 关联上传记录（一个上传文件最多绑定一个任务） */
-    private Long minioFileId;
-    private String fileName;
-    private String fileUrl;
-    private Long fileSize;
-    private Long uploadedBy;
+    private Long reportId;
+    /** SUBMITTED / WITHDRAWN / EDITED / RESUBMITTED / APPROVED / REJECTED */
+    private String action;
+    private String content;
+    private Integer progress;
+    private Long actorId;
     private LocalDateTime createdAt;
 }
