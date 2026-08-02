@@ -10,6 +10,7 @@ import com.task.enums.ReportStatus;
 import com.task.enums.Role;
 import com.task.enums.TaskStatus;
 import com.task.mapper.*;
+import com.task.service.MinioObjectService;
 import com.task.service.TaskService;
 import com.task.vo.AttachmentVO;
 import com.task.vo.TaskMemberVO;
@@ -22,9 +23,11 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,6 +40,7 @@ public class TaskServiceImpl implements TaskService {
     private final TaskAttachmentMapper attachmentMapper;
     private final MinioFileMapper minioFileMapper;
     private final ReportMapper reportMapper;
+    private final MinioObjectService minioObjectService;
 
     @Value("${minio.public-url}")
     private String minioPublicUrl;
@@ -135,17 +139,32 @@ public class TaskServiceImpl implements TaskService {
             m.setProgress(0);
             memberMapper.insert(m);
         }
-        // 关联附件（minio_file id → task_attachment）
-        if (req.getAttachmentIds() != null) {
-            for (Long fileId : req.getAttachmentIds()) {
-                MinioFile f = minioFileMapper.selectById(fileId);
-                if (f == null) continue;
+        // 关联附件：先整体校验（重复/存在/归属/未绑定），任一非法则整个任务创建失败
+        if (req.getAttachmentIds() != null && !req.getAttachmentIds().isEmpty()) {
+            List<Long> ids = req.getAttachmentIds();
+            if (ids.stream().distinct().count() != ids.size()) {
+                throw new BusinessException("附件列表不能重复");
+            }
+            // 按 id 升序锁行，统一加锁顺序降低死锁风险
+            List<MinioFile> files = minioFileMapper.selectByIdsForUpdate(
+                    ids.stream().sorted().collect(Collectors.toList()));
+            if (files.size() != ids.size()) throw new BusinessException("附件不存在");
+            for (MinioFile f : files) {
+                if (!creator.getId().equals(f.getUploaderId())) {
+                    throw new BusinessException("只能使用自己上传的文件");
+                }
+                if (attachmentMapper.selectByMinioFileId(f.getId()) != null) {
+                    throw new BusinessException("附件已被其他任务绑定");
+                }
+            }
+            for (MinioFile f : files) {
                 TaskAttachment a = new TaskAttachment();
                 a.setTaskId(task.getId());
+                a.setMinioFileId(f.getId());
                 a.setFileName(f.getFileName());
                 a.setFileUrl(minioPublicUrl + "/" + minioBucket + "/" + f.getObjectName());
                 a.setFileSize(f.getSize());
-                a.setUploadedBy(creator.getId());
+                a.setUploadedBy(f.getUploaderId());
                 attachmentMapper.insert(a);
             }
         }
@@ -189,11 +208,17 @@ public class TaskServiceImpl implements TaskService {
         taskMapper.updateById(t);
     }
 
+    /**
+     * 只允许创建者本人删除（不用 canManage，管理员无权删他人任务）。
+     * 附件先整体校验（minio_file_id 非空、文件存在、上传者匹配），再删 MinIO、
+     * 删 attachment/minio 行，最后逻辑删除任务；MinIO 失败则整件事务回滚。
+     */
     @Override
+    @Transactional
     public void delete(Long id, SysUser cur) {
         Task t = taskMapper.selectById(id);
         if (t == null) throw new BusinessException("任务不存在");
-        if (!canManage(t, cur)) throw new BusinessException(403, "无权删除任务");
+        if (!t.getCreatorId().equals(cur.getId())) throw new BusinessException(403, "无权删除任务");
         List<Long> memberIds = memberMapper.selectList(new LambdaQueryWrapper<TaskMember>()
                         .eq(TaskMember::getTaskId, id))
                 .stream().map(TaskMember::getId).collect(Collectors.toList());
@@ -202,6 +227,28 @@ public class TaskServiceImpl implements TaskService {
                     .in(Report::getTaskMemberId, memberIds)
                     .eq(Report::getStatus, ReportStatus.PENDING));
             if (pending > 0) throw new BusinessException("存在待审核汇报，无法删除");
+        }
+        List<TaskAttachment> attachments = attachmentMapper.selectList(
+                new LambdaQueryWrapper<TaskAttachment>().eq(TaskAttachment::getTaskId, id));
+        if (!attachments.isEmpty()) {
+            List<Long> fileIds = attachments.stream().map(TaskAttachment::getMinioFileId)
+                    .sorted(Comparator.nullsFirst(Long::compareTo))
+                    .collect(Collectors.toList());
+            if (fileIds.stream().anyMatch(Objects::isNull)) {
+                throw new BusinessException("存在未关联的遗留附件，无法删除");
+            }
+            List<MinioFile> files = minioFileMapper.selectByIdsForUpdate(fileIds);
+            Map<Long, MinioFile> byId = files.stream().collect(Collectors.toMap(MinioFile::getId, x -> x));
+            for (TaskAttachment a : attachments) {
+                MinioFile f = byId.get(a.getMinioFileId());
+                if (f == null) throw new BusinessException("附件关联的文件不存在，无法删除");
+                if (!cur.getId().equals(f.getUploaderId())) {
+                    throw new BusinessException("附件归属异常，无法删除");
+                }
+            }
+            for (MinioFile f : files) minioObjectService.delete(f.getObjectName());
+            for (TaskAttachment a : attachments) attachmentMapper.deleteById(a.getId());
+            for (MinioFile f : files) minioFileMapper.deleteById(f.getId());
         }
         taskMapper.deleteById(id); // 逻辑删除
     }
