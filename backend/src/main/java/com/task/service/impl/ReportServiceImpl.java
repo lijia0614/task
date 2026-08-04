@@ -125,7 +125,13 @@ public class ReportServiceImpl implements ReportService {
         Report report = reportMapper.selectByIdForUpdate(reportId);
         if (report == null) throw new BusinessException("汇报不存在");
         TaskMember member = memberMapper.selectById(report.getTaskMemberId());
-        Task task = taskMapper.selectById(member.getTaskId());
+        if (member == null) throw new BusinessException("汇报数据异常");
+        // 锁序 report → task → member（与 resubmit 一致）：先显式锁 task 再锁 member。
+        // 若按"UPDATE member 后再 UPDATE task"取写锁，会与 resubmit 的"先锁 task 再锁 member"
+        // 在相同 task/member 上交叉等待形成死锁（InnoDB 回滚 → 500）
+        Task task = taskMapper.selectByIdForUpdate(member.getTaskId());
+        if (task == null) throw new BusinessException("任务不存在");
+        TaskMember lockedMember = memberMapper.selectByIdForUpdate(member.getId());
         SysUser reviewer = UserContext.get();
         if (reviewer.getRole() != Role.ADMIN && !task.getCreatorId().equals(reviewer.getId())) {
             throw new BusinessException(403, "无权审核该汇报");
@@ -136,7 +142,7 @@ public class ReportServiceImpl implements ReportService {
 
         int finalProgress = req.getProgress() != null ? req.getProgress() : report.getProgress();
         if (finalProgress > 100) throw new BusinessException("最终进度不能超过 100");
-        if (finalProgress < member.getProgress()) throw new BusinessException("最终进度不能低于当前进度");
+        if (finalProgress < lockedMember.getProgress()) throw new BusinessException("最终进度不能低于当前进度");
 
         report.setStatus(ReportStatus.APPROVED);
         report.setFinalProgress(finalProgress);
@@ -146,8 +152,8 @@ public class ReportServiceImpl implements ReportService {
         reportMapper.updateById(report);
         recordHistory(report, "APPROVED", finalProgress);
 
-        member.setProgress(finalProgress);
-        memberMapper.updateById(member);
+        lockedMember.setProgress(finalProgress);
+        memberMapper.updateById(lockedMember);
 
         // 重算整体进度与完成状态
         List<TaskMember> members = memberMapper.selectList(new LambdaQueryWrapper<TaskMember>()
