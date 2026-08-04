@@ -13,4 +13,7 @@ public interface ReportService {
     void approve(Long reportId, ReviewRequest req);
     void reject(Long reportId, ReviewRequest req);
     List<ReportVO> pendingList(SysUser current);
+    void withdraw(Long reportId);
+    void update(Long reportId, ReportRequest req);
+    void resubmit(Long reportId);
 }

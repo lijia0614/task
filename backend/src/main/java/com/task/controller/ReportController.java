@@ -40,6 +40,24 @@ public class ReportController {
         return Result.ok();
     }
 
+    @PostMapping("/reports/{id}/withdraw")
+    public Result<Void> withdraw(@PathVariable Long id) {
+        reportService.withdraw(id);
+        return Result.ok();
+    }
+
+    @PutMapping("/reports/{id}")
+    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody ReportRequest req) {
+        reportService.update(id, req);
+        return Result.ok();
+    }
+
+    @PostMapping("/reports/{id}/resubmit")
+    public Result<Void> resubmit(@PathVariable Long id) {
+        reportService.resubmit(id);
+        return Result.ok();
+    }
+
     @GetMapping("/reports/pending")
     public Result<List<ReportVO>> pending() {
         return Result.ok(reportService.pendingList(UserContext.get()));

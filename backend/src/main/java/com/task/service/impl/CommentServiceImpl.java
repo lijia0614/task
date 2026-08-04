@@ -33,8 +33,9 @@ public class CommentServiceImpl implements CommentService {
     private final TaskMemberMapper memberMapper;
     private final SysUserMapper userMapper;
 
-    /** 汇报可见性：APPROVED 对所有人可见；PENDING/REJECTED 仅本人、审核人（创建者/管理员）可见 */
+    /** 汇报可见性：APPROVED 对所有人可见；WITHDRAWN 仅提交人可见；PENDING/REJECTED 仅本人、审核人（创建者/管理员）可见 */
     private boolean canSeeReport(Report r, SysUser cur) {
+        if (r.getStatus() == ReportStatus.WITHDRAWN) return r.getUserId().equals(cur.getId());
         if (r.getStatus() == ReportStatus.APPROVED) return true;
         if (r.getUserId().equals(cur.getId())) return true;
         if (cur.getRole() == Role.ADMIN) return true;

@@ -1,6 +1,7 @@
 package com.task.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.task.auth.UserContext;
 import com.task.common.BusinessException;
 import com.task.dto.ReportRequest;
@@ -27,6 +28,7 @@ public class ReportServiceImpl implements ReportService {
     private final TaskMemberMapper memberMapper;
     private final TaskMapper taskMapper;
     private final SysUserMapper userMapper;
+    private final ReportHistoryMapper historyMapper;
 
     /** 校验：新进度必须 ≥ 当前进度，且 ≤ 100 */
     public static void checkProgressRule(int current, int target) {
@@ -34,13 +36,32 @@ public class ReportServiceImpl implements ReportService {
         if (target > 100) throw new IllegalArgumentException("进度不能超过 100");
     }
 
+    /** 每次成功操作后，在同一事务记录内容与进度快照；APPROVED 记 finalProgress，其余记汇报请求进度 */
+    private void recordHistory(Report r, String action, Integer snapshotProgress) {
+        ReportHistory h = new ReportHistory();
+        h.setReportId(r.getId());
+        h.setAction(action);
+        h.setContent(r.getContent());
+        h.setProgress(snapshotProgress != null ? snapshotProgress : r.getProgress());
+        h.setActorId(UserContext.get().getId());
+        historyMapper.insert(h);
+    }
+
+    /** 锁序与删除任务一致（task → member）：先锁 task 行校验存在/未删除，再锁成员行 */
     @Override
     @Transactional
     public Long submit(Long taskId, ReportRequest req) {
-        TaskMember member = memberMapper.selectOne(new LambdaQueryWrapper<TaskMember>()
-                .eq(TaskMember::getTaskId, taskId)
-                .eq(TaskMember::getUserId, UserContext.get().getId()));
+        SysUser current = UserContext.get();
+        Task task = taskMapper.selectByIdForUpdate(taskId);
+        if (task == null || (task.getDeleted() != null && task.getDeleted() == 1)) {
+            throw new BusinessException("任务不存在");
+        }
+        TaskMember member = memberMapper.selectByTaskAndUserForUpdate(taskId, current.getId());
         if (member == null) throw new BusinessException("你不是该任务的成员");
+        // 同一成员同一时间最多一条 PENDING
+        if (hasPending(member.getId())) {
+            throw new BusinessException("存在待审核的汇报，请先等待审核或撤回");
+        }
         try {
             checkProgressRule(member.getProgress(), req.getProgress());
         } catch (IllegalArgumentException e) {
@@ -48,20 +69,27 @@ public class ReportServiceImpl implements ReportService {
         }
         Report r = new Report();
         r.setTaskMemberId(member.getId());
-        r.setUserId(UserContext.get().getId());
+        r.setUserId(current.getId());
         r.setContent(req.getContent());
         r.setProgress(req.getProgress());
         r.setStatus(ReportStatus.PENDING);
         reportMapper.insert(r);
+        recordHistory(r, "SUBMITTED", null);
         return r.getId();
     }
 
-    /** 可见性：本人或审核人见全部；其他人仅见 APPROVED */
+    private boolean hasPending(Long taskMemberId) {
+        return reportMapper.selectCount(new LambdaQueryWrapper<Report>()
+                .eq(Report::getTaskMemberId, taskMemberId)
+                .eq(Report::getStatus, ReportStatus.PENDING)) > 0;
+    }
+
+    /** 可见性：本人或审核人见全部（WITHDRAWN 除外——仅提交人可见）；其他人仅见 APPROVED */
     @Override
     public List<ReportVO> listByTask(Long taskId, SysUser current) {
         Task task = taskMapper.selectById(taskId);
         if (task == null) throw new BusinessException("任务不存在");
-        boolean isReviewer = current.getRole() == com.task.enums.Role.ADMIN
+        boolean isReviewer = current.getRole() == Role.ADMIN
                 || task.getCreatorId().equals(current.getId());
 
         List<TaskMember> members = memberMapper.selectList(new LambdaQueryWrapper<TaskMember>()
@@ -73,8 +101,14 @@ public class ReportServiceImpl implements ReportService {
                 .orderByDesc(Report::getId));
 
         return reports.stream()
-                .filter(r -> isReviewer || r.getStatus() == ReportStatus.APPROVED
-                        || r.getUserId().equals(current.getId()))
+                .filter(r -> {
+                    // WITHDRAWN 仅提交人可见，审核人/其他成员一律不可见
+                    if (r.getStatus() == ReportStatus.WITHDRAWN && !r.getUserId().equals(current.getId())) {
+                        return false;
+                    }
+                    return isReviewer || r.getStatus() == ReportStatus.APPROVED
+                            || r.getUserId().equals(current.getId());
+                })
                 .map(this::toVO)
                 .collect(Collectors.toList());
     }
@@ -88,7 +122,7 @@ public class ReportServiceImpl implements ReportService {
     @Transactional
     public void approve(Long reportId, ReviewRequest req) {
         // 先加载数据并校验权限，再做状态/参数校验：未授权用户不得通过错误文案获知汇报状态
-        Report report = reportMapper.selectById(reportId);
+        Report report = reportMapper.selectByIdForUpdate(reportId);
         if (report == null) throw new BusinessException("汇报不存在");
         TaskMember member = memberMapper.selectById(report.getTaskMemberId());
         Task task = taskMapper.selectById(member.getTaskId());
@@ -96,7 +130,9 @@ public class ReportServiceImpl implements ReportService {
         if (reviewer.getRole() != Role.ADMIN && !task.getCreatorId().equals(reviewer.getId())) {
             throw new BusinessException(403, "无权审核该汇报");
         }
-        if (report.getStatus() != ReportStatus.PENDING) throw new BusinessException("该汇报已审核");
+        if (report.getStatus() != ReportStatus.PENDING) {
+            throw new BusinessException("汇报状态已变化，请刷新");
+        }
 
         int finalProgress = req.getProgress() != null ? req.getProgress() : report.getProgress();
         if (finalProgress > 100) throw new BusinessException("最终进度不能超过 100");
@@ -108,6 +144,7 @@ public class ReportServiceImpl implements ReportService {
         report.setReviewComment(req.getReviewComment());
         report.setReviewedAt(LocalDateTime.now());
         reportMapper.updateById(report);
+        recordHistory(report, "APPROVED", finalProgress);
 
         member.setProgress(finalProgress);
         memberMapper.updateById(member);
@@ -129,7 +166,7 @@ public class ReportServiceImpl implements ReportService {
     @Transactional
     public void reject(Long reportId, ReviewRequest req) {
         // 先加载数据并校验权限，再做状态/参数校验：未授权用户不得通过错误文案获知汇报状态
-        Report report = reportMapper.selectById(reportId);
+        Report report = reportMapper.selectByIdForUpdate(reportId);
         if (report == null) throw new BusinessException("汇报不存在");
         TaskMember member = memberMapper.selectById(report.getTaskMemberId());
         Task task = taskMapper.selectById(member.getTaskId());
@@ -140,13 +177,89 @@ public class ReportServiceImpl implements ReportService {
         if (req.getReviewComment() == null || req.getReviewComment().isBlank()) {
             throw new BusinessException("驳回必须填写审核内容（不通过的理由）");
         }
-        if (report.getStatus() != ReportStatus.PENDING) throw new BusinessException("该汇报已审核");
+        if (report.getStatus() != ReportStatus.PENDING) {
+            throw new BusinessException("汇报状态已变化，请刷新");
+        }
 
         report.setStatus(ReportStatus.REJECTED);
         report.setReviewerId(reviewer.getId());
         report.setReviewComment(req.getReviewComment());
         report.setReviewedAt(LocalDateTime.now());
         reportMapper.updateById(report);
+        recordHistory(report, "REJECTED", null);
+    }
+
+    /** PENDING → WITHDRAWN；仅提交人；状态变化并发时只有一个成功 */
+    @Override
+    @Transactional
+    public void withdraw(Long reportId) {
+        Report report = reportMapper.selectByIdForUpdate(reportId);
+        if (report == null) throw new BusinessException("汇报不存在");
+        if (!report.getUserId().equals(UserContext.get().getId())) {
+            throw new BusinessException(403, "无权操作该汇报");
+        }
+        if (report.getStatus() != ReportStatus.PENDING) {
+            throw new BusinessException("汇报状态已变化，请刷新");
+        }
+        report.setStatus(ReportStatus.WITHDRAWN);
+        reportMapper.updateById(report);
+        recordHistory(report, "WITHDRAWN", null);
+    }
+
+    /** 仅 WITHDRAWN 可编辑；目标进度不低于成员当前进度且 ≤ 100 */
+    @Override
+    @Transactional
+    public void update(Long reportId, ReportRequest req) {
+        Report report = reportMapper.selectByIdForUpdate(reportId);
+        if (report == null) throw new BusinessException("汇报不存在");
+        if (!report.getUserId().equals(UserContext.get().getId())) {
+            throw new BusinessException(403, "无权操作该汇报");
+        }
+        if (report.getStatus() != ReportStatus.WITHDRAWN) {
+            throw new BusinessException("汇报状态已变化，请刷新");
+        }
+        TaskMember member = memberMapper.selectById(report.getTaskMemberId());
+        try {
+            checkProgressRule(member.getProgress(), req.getProgress());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(e.getMessage());
+        }
+        report.setContent(req.getContent());
+        report.setProgress(req.getProgress());
+        reportMapper.updateById(report);
+        recordHistory(report, "EDITED", null);
+    }
+
+    /** WITHDRAWN → PENDING；清空旧审核字段；锁成员行保证单待审核 */
+    @Override
+    @Transactional
+    public void resubmit(Long reportId) {
+        Report report = reportMapper.selectByIdForUpdate(reportId);
+        if (report == null) throw new BusinessException("汇报不存在");
+        if (!report.getUserId().equals(UserContext.get().getId())) {
+            throw new BusinessException(403, "无权操作该汇报");
+        }
+        if (report.getStatus() != ReportStatus.WITHDRAWN) {
+            throw new BusinessException("汇报状态已变化，请刷新");
+        }
+        TaskMember member = memberMapper.selectByIdForUpdate(report.getTaskMemberId());
+        if (hasPending(member.getId())) {
+            throw new BusinessException("存在待审核的汇报，请先等待审核或撤回");
+        }
+        // updateById 不更新 null 字段，清空审核字段必须显式 SET NULL
+        reportMapper.update(null, new LambdaUpdateWrapper<Report>()
+                .eq(Report::getId, report.getId())
+                .set(Report::getStatus, ReportStatus.PENDING)
+                .set(Report::getReviewerId, null)
+                .set(Report::getReviewComment, null)
+                .set(Report::getReviewedAt, null)
+                .set(Report::getFinalProgress, null));
+        report.setStatus(ReportStatus.PENDING);
+        report.setReviewerId(null);
+        report.setReviewComment(null);
+        report.setReviewedAt(null);
+        report.setFinalProgress(null);
+        recordHistory(report, "RESUBMITTED", null);
     }
 
     @Override

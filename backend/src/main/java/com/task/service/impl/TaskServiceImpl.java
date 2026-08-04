@@ -213,17 +213,20 @@ public class TaskServiceImpl implements TaskService {
 
     /**
      * 只允许创建者本人删除（不用 canManage，管理员无权删他人任务）。
+     * 锁序 task → members，与提交汇报一致：锁 task 行校验未删除，再锁成员行检查
+     * 待审核汇报，杜绝"删除检查后插入新 PENDING"的并发竞态。
      * 附件先整体校验（minio_file_id 非空、文件存在、上传者匹配），再删 MinIO、
      * 删 attachment/minio 行，最后逻辑删除任务；MinIO 失败则整件事务回滚。
      */
     @Override
     @Transactional
     public void delete(Long id, SysUser cur) {
-        Task t = taskMapper.selectById(id);
-        if (t == null) throw new BusinessException("任务不存在");
+        Task t = taskMapper.selectByIdForUpdate(id);
+        if (t == null || (t.getDeleted() != null && t.getDeleted() == 1)) {
+            throw new BusinessException("任务不存在");
+        }
         if (!t.getCreatorId().equals(cur.getId())) throw new BusinessException(403, "无权删除任务");
-        List<Long> memberIds = memberMapper.selectList(new LambdaQueryWrapper<TaskMember>()
-                        .eq(TaskMember::getTaskId, id))
+        List<Long> memberIds = memberMapper.selectByTaskIdForUpdate(id)
                 .stream().map(TaskMember::getId).collect(Collectors.toList());
         if (!memberIds.isEmpty()) {
             Long pending = reportMapper.selectCount(new LambdaQueryWrapper<Report>()
