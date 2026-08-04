@@ -230,7 +230,13 @@ public class ReportServiceImpl implements ReportService {
         recordHistory(report, "EDITED", null);
     }
 
-    /** WITHDRAWN → PENDING；清空旧审核字段；锁成员行保证单待审核 */
+    /**
+     * WITHDRAWN → PENDING；清空旧审核字段；锁成员行保证单待审核。
+     * 锁顺序 report → task → member：task 锁先于 member 锁，与 delete/submit 的
+     * task → member 序一致，绝不在持有 member 锁后再等待 task 锁（否则与 delete 成环）。
+     * 重新校验所属任务未删除（已删除 → 「任务不存在」）与当前汇报进度
+     * （不低于成员当前进度且 ≤ 100），任一失败保持 WITHDRAWN 且不写历史。
+     */
     @Override
     @Transactional
     public void resubmit(Long reportId) {
@@ -242,8 +248,21 @@ public class ReportServiceImpl implements ReportService {
         if (report.getStatus() != ReportStatus.WITHDRAWN) {
             throw new BusinessException("汇报状态已变化，请刷新");
         }
-        TaskMember member = memberMapper.selectByIdForUpdate(report.getTaskMemberId());
-        if (hasPending(member.getId())) {
+        TaskMember member = memberMapper.selectById(report.getTaskMemberId());
+        if (member == null) throw new BusinessException("任务不存在");
+        // 先锁 task（校验未删除），再锁 member —— 与 delete/submit 的 task → member 锁序一致
+        Task task = taskMapper.selectByIdForUpdate(member.getTaskId());
+        if (task == null || (task.getDeleted() != null && task.getDeleted() == 1)) {
+            throw new BusinessException("任务不存在");
+        }
+        TaskMember lockedMember = memberMapper.selectByIdForUpdate(member.getId());
+        // 重提必须按规格重新校验当前汇报进度
+        try {
+            checkProgressRule(lockedMember.getProgress(), report.getProgress());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(e.getMessage());
+        }
+        if (hasPending(lockedMember.getId())) {
             throw new BusinessException("存在待审核的汇报，请先等待审核或撤回");
         }
         // updateById 不更新 null 字段，清空审核字段必须显式 SET NULL

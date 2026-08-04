@@ -33,14 +33,20 @@ public class CommentServiceImpl implements CommentService {
     private final TaskMemberMapper memberMapper;
     private final SysUserMapper userMapper;
 
-    /** 汇报可见性：APPROVED 对所有人可见；WITHDRAWN 仅提交人可见；PENDING/REJECTED 仅本人、审核人（创建者/管理员）可见 */
+    /**
+     * 汇报可见性：APPROVED 对所有人可见；WITHDRAWN 仅提交人可见；PENDING/REJECTED
+     * 仅本人、审核人（创建者/管理员）可见。
+     * 所属任务已删除（或不存在）时一律不可访问——汇报/评论保留用于审计，
+     * 但普通业务查询不能再通过已删除任务访问它们。
+     */
     private boolean canSeeReport(Report r, SysUser cur) {
+        TaskMember m = memberMapper.selectById(r.getTaskMemberId());
+        Task t = m == null ? null : taskMapper.selectById(m.getTaskId());
+        if (t == null) return false; // 任务已逻辑删除或数据异常
         if (r.getStatus() == ReportStatus.WITHDRAWN) return r.getUserId().equals(cur.getId());
         if (r.getStatus() == ReportStatus.APPROVED) return true;
         if (r.getUserId().equals(cur.getId())) return true;
         if (cur.getRole() == Role.ADMIN) return true;
-        TaskMember m = memberMapper.selectById(r.getTaskMemberId());
-        Task t = taskMapper.selectById(m.getTaskId());
         return t.getCreatorId().equals(cur.getId());
     }
 
