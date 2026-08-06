@@ -255,6 +255,7 @@ const submittingReport = ref(false)
 const savingEdit = ref(false)
 const actionId = ref(null)
 let loadSeq = 0
+const reportCommentRequestSeq = new Map()
 
 const currentUserId = computed(() => auth.user?.id)
 const isMyTask = computed(() => task.value?.members?.some(m => m.userId === currentUserId.value))
@@ -279,16 +280,21 @@ const isReportOwner = report => Number(report.userId) === Number(currentUserId.v
 const repliesOf = comment => taskCommentList.value.filter(c => c.parentId === comment.id)
 
 const loadReportCommentList = async (reportId, seq = loadSeq) => {
-  if (reportCommentLoading.has(reportId)) return
+  const requestSeq = (reportCommentRequestSeq.get(reportId) || 0) + 1
+  reportCommentRequestSeq.set(reportId, requestSeq)
   reportCommentLoading.add(reportId)
   delete reportCommentErrors[reportId]
   try {
     const comments = await reportComments(reportId)
-    if (seq === loadSeq) reportCommentMap[reportId] = comments || []
+    if (seq === loadSeq && requestSeq === reportCommentRequestSeq.get(reportId)) {
+      reportCommentMap[reportId] = comments || []
+    }
   } catch (e) {
-    if (seq === loadSeq) reportCommentErrors[reportId] = e.message || '评论加载失败'
+    if (seq === loadSeq && requestSeq === reportCommentRequestSeq.get(reportId)) {
+      reportCommentErrors[reportId] = e.message || '评论加载失败'
+    }
   } finally {
-    reportCommentLoading.delete(reportId)
+    if (requestSeq === reportCommentRequestSeq.get(reportId)) reportCommentLoading.delete(reportId)
   }
 }
 
@@ -427,7 +433,8 @@ watch(() => route.params.id, load)
 .detail-page { min-width: 0; }
 .detail-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .overview-section { border-top: 3px solid var(--color-primary); }
-.overview-section h2 { margin: 4px 0 0; font-size: 22px; line-height: 1.25; }
+.overview-section .page-head > div:first-child { min-width: 0; }
+.overview-section h2 { margin: 4px 0 0; font-size: 22px; line-height: 1.25; overflow-wrap: anywhere; word-break: break-word; }
 .eyebrow { display: block; color: var(--color-text-muted); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
 .overview-progress { display: flex; flex-direction: column; align-items: flex-end; color: var(--color-text-muted); }
 .overview-progress strong { color: var(--color-primary); font-size: 30px; line-height: 1; }
@@ -462,6 +469,7 @@ watch(() => route.params.id, load)
 .report-status-rejected { border-left-color: var(--color-danger); }
 .report-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .report-author { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.report-author strong { min-width: 0; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .report-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-border-strong); flex: 0 0 8px; }
 .dot-pending { background: var(--color-warning); }.dot-approved { background: var(--color-success); }.dot-rejected { background: var(--color-danger); }.dot-withdrawn { background: var(--color-text-muted); }
 .report-time, .comment-time { color: var(--color-text-muted); font-size: 12px; }
@@ -488,7 +496,7 @@ watch(() => route.params.id, load)
 .task-description, .report-content, .review-detail p, .comment-row p, .task-reply { overflow-wrap: anywhere; word-break: break-word; }
 @media (max-width: 767px) {
   .overview-section h2 { font-size: 19px; }.overview-progress strong { font-size: 24px; }.task-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .member-row { display: block; }.member-identity { width: auto; margin-bottom: 8px; }.report-head { align-items: flex-start; }.report-time { display: block; }.report-progress-line { flex-wrap: wrap; gap: 6px 14px; }
+  .member-row { display: block; }.member-identity { width: auto; margin-bottom: 8px; }.report-head { align-items: flex-start; }.report-author strong { max-width: 38vw; }.report-time { display: none; }.report-progress-line { flex-wrap: wrap; gap: 6px 14px; }
   .new-report-actions .el-button { width: 100%; margin-left: 0; }.comment-compose { align-items: stretch; }.reply-editor { margin-left: 0; }
 }
 </style>
