@@ -1,5 +1,6 @@
 package com.task.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.task.TaskApplication;
 import com.task.entity.Report;
@@ -234,7 +235,13 @@ class ReportPendingUniquenessTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(om.writeValueAsString(Map.of("content", "并发提交", "progress", 50))))
                         .andReturn();
-                codes.add(om.readTree(res.getResponse().getContentAsString()).get("code").asInt());
+                JsonNode body = om.readTree(res.getResponse().getContentAsString());
+                codes.add(body.get("code").asInt());
+                // API 成功创建的报告必须登记进 createdReportIds：
+                // 否则 cleanup 按已记录 id 删除后，report/history 随 member/task 被删而成为孤儿
+                if (body.get("code").asInt() == 0 && body.get("data").isIntegralNumber()) {
+                    createdReportIds.add(body.get("data").asLong());
+                }
             } catch (Exception ignored) { }
         });
         start.countDown();

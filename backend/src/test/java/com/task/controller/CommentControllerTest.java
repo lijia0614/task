@@ -57,6 +57,10 @@ class CommentControllerTest {
     @AfterEach
     void cleanup() {
         for (Long id : createdCommentIds) jdbcTemplate.update("DELETE FROM comment WHERE id = ?", id);
+        // API 创建的评论（任务/汇报/回复）不返回并记录 id，必须按 report_id/task_id 兜底删除，
+        // 否则每次运行泄漏 comment 行（Task 5 验证发现的清理缺陷）
+        for (Long id : createdReportIds) jdbcTemplate.update("DELETE FROM comment WHERE report_id = ?", id);
+        for (Long id : createdTaskIds) jdbcTemplate.update("DELETE FROM comment WHERE task_id = ?", id);
         for (Long id : createdReportIds) jdbcTemplate.update("DELETE FROM report WHERE id = ?", id);
         for (Long id : createdMemberIds) jdbcTemplate.update("DELETE FROM task_member WHERE id = ?", id);
         for (Long id : createdTaskIds) jdbcTemplate.update("DELETE FROM task WHERE id = ?", id);
