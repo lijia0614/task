@@ -33,8 +33,8 @@ function loadRole() {
 router.beforeEach((to) => {
   if (to.path !== '/login' && !localStorage.getItem('token')) return '/login'
   if (to.path === '/login' && localStorage.getItem('token')) return '/tasks'
-  // 创建任务仅管理员/组长；直接访问 URL 的越权用户安全返回任务列表
-  if (to.path === '/tasks/create') {
+  // 创建与审核仅管理员/组长；直接访问 URL 的越权用户安全返回任务列表
+  if (to.path === '/tasks/create' || to.path === '/reports/pending') {
     const role = loadRole()
     if (role !== 'ADMIN' && role !== 'LEADER') return '/tasks'
   }
