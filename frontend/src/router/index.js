@@ -19,9 +19,25 @@ const routes = [
 
 const router = createRouter({ history: createWebHistory(), routes })
 
+/** 安全解析本地用户信息（损坏 JSON 不抛异常） */
+function loadRole() {
+  const raw = localStorage.getItem('user')
+  if (!raw) return null
+  try {
+    return JSON.parse(raw)?.role || null
+  } catch {
+    return null
+  }
+}
+
 router.beforeEach((to) => {
   if (to.path !== '/login' && !localStorage.getItem('token')) return '/login'
   if (to.path === '/login' && localStorage.getItem('token')) return '/tasks'
+  // 创建任务仅管理员/组长；直接访问 URL 的越权用户安全返回任务列表
+  if (to.path === '/tasks/create') {
+    const role = loadRole()
+    if (role !== 'ADMIN' && role !== 'LEADER') return '/tasks'
+  }
 })
 
 export default router
