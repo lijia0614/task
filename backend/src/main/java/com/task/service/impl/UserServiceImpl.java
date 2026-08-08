@@ -19,6 +19,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -36,8 +37,16 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+    private void requireCandidateReader() {
+        Role role = UserContext.get().getRole();
+        if (role != Role.ADMIN && role != Role.LEADER) {
+            throw new BusinessException(403, "无权读取用户候选人");
+        }
+    }
+
     @Override
     public Page<UserVO> list(long page, long size, String keyword, String role) {
+        requireAdmin();
         if (page < 1 || size < 1 || size > 1000) throw new BusinessException("分页参数不合法");
         LambdaQueryWrapper<SysUser> qw = new LambdaQueryWrapper<SysUser>()
                 .like(StringUtils.hasText(keyword), SysUser::getRealName, keyword)
@@ -51,6 +60,16 @@ public class UserServiceImpl implements UserService {
                 .map(u -> UserVO.from(u, u.getGroupId() == null ? null : groupNames.get(u.getGroupId())))
                 .collect(Collectors.toList()));
         return voPage;
+    }
+
+    @Override
+    public List<UserVO> candidates() {
+        requireCandidateReader();
+        Map<Long, String> groupNames = groupMapper.selectList(null).stream()
+                .collect(Collectors.toMap(SysGroup::getId, SysGroup::getName));
+        return userMapper.selectList(new LambdaQueryWrapper<SysUser>().orderByAsc(SysUser::getId)).stream()
+                .map(u -> UserVO.from(u, u.getGroupId() == null ? null : groupNames.get(u.getGroupId())))
+                .collect(Collectors.toList());
     }
 
     @Override

@@ -98,7 +98,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Upload } from '@element-plus/icons-vue'
-import { listUsers } from '../api/user'
+import { listUserCandidates } from '../api/user'
 import { listGroups, groupMembers } from '../api/group'
 import { uploadFile, deleteFile } from '../api/file'
 import { createTask } from '../api/task'
@@ -324,7 +324,7 @@ const submit = async () => {
 }
 
 onMounted(async () => {
-  userCandidates.value = (await listUsers({ page: 1, size: 1000 })).records
+  userCandidates.value = await listUserCandidates()
   groups.value = await listGroups()
 })
 </script>

@@ -38,6 +38,8 @@ router.beforeEach((to) => {
     const role = loadRole()
     if (role !== 'ADMIN' && role !== 'LEADER') return '/tasks'
   }
+  // 用户目录包含账号与组织信息，只允许管理员直接访问
+  if (to.path === '/users' && loadRole() !== 'ADMIN') return '/tasks'
 })
 
 export default router

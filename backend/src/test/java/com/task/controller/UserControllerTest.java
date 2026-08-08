@@ -85,6 +85,56 @@ class UserControllerTest {
     }
 
     @Test
+    void employeeCannotListUsers() throws Exception {
+        String token = login("zhangsan", "123456");
+        mvc.perform(get("/api/users").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(403));
+    }
+
+    @Test
+    void leaderCannotListUsers() throws Exception {
+        String token = login("leader1", "123456");
+        mvc.perform(get("/api/users").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(403));
+    }
+
+    @Test
+    void adminCanListUsers() throws Exception {
+        String token = login("admin", "admin123");
+        mvc.perform(get("/api/users").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+    }
+
+    @Test
+    void leaderCanListUserCandidates() throws Exception {
+        String token = login("leader1", "123456");
+        mvc.perform(get("/api/users/candidates").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data").isArray());
+    }
+
+    @Test
+    void adminCanListUserCandidates() throws Exception {
+        String token = login("admin", "admin123");
+        mvc.perform(get("/api/users/candidates").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data").isArray());
+    }
+
+    @Test
+    void employeeCannotListUserCandidates() throws Exception {
+        String token = login("zhangsan", "123456");
+        mvc.perform(get("/api/users/candidates").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(403));
+    }
+
+    @Test
     void adminCanCreateUser() throws Exception {
         String token = login("admin", "admin123");
         // 唯一用户名避免重复执行冲突
@@ -122,7 +172,8 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.code").value(400));
     }
 
-    /** 分页参数非法应返回 400；契约：size 上限为 1000（前端候选列表用 size=999 拉全量） */
+    /** 分页参数非法应返回 400；契约：size 上限为 1000 */
+
     @Test
     void invalidPagingParamsReturn400() throws Exception {
         String token = login("admin", "admin123");
@@ -137,7 +188,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.code").value(400));
     }
 
-    /** 契约：size=999（前端候选列表用法）必须合法 */
+    /** 契约：size=999（接近上限）必须合法 */
     @Test
     void pagingSize999Accepted() throws Exception {
         String token = login("admin", "admin123");

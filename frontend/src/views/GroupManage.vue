@@ -166,7 +166,7 @@ import {
   removeMember,
   updateGroup
 } from '../api/group'
-import { listUsers } from '../api/user'
+import { listUserCandidates } from '../api/user'
 import { useAuthStore } from '../store/auth'
 
 const auth = useAuthStore()
@@ -212,11 +212,11 @@ const load = async ({ silent = false } = {}) => {
   try {
     const [groupData, userData] = await Promise.all([
       listGroups(),
-      auth.canCreateTask ? listUsers({ page: 1, size: 1000 }) : Promise.resolve(null)
+      auth.canCreateTask ? listUserCandidates() : Promise.resolve(null)
     ])
     if (seq !== loadRequestSeq) return
     groups.value = Array.isArray(groupData) ? groupData : []
-    users.value = auth.canCreateTask && Array.isArray(userData?.records) ? userData.records : []
+    users.value = auth.canCreateTask && Array.isArray(userData) ? userData : []
     if (currentGroup.value) {
       const freshGroup = groups.value.find(group => group.id === currentGroup.value.id)
       if (freshGroup) currentGroup.value = freshGroup

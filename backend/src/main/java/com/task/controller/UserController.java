@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -23,6 +24,11 @@ public class UserController {
                                      @RequestParam(required = false) String keyword,
                                      @RequestParam(required = false) String role) {
         return Result.ok(userService.list(page, size, keyword, role));
+    }
+
+    @GetMapping("/candidates")
+    public Result<List<UserVO>> candidates() {
+        return Result.ok(userService.candidates());
     }
 
     @PostMapping
