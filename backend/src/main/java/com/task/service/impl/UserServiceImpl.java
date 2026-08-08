@@ -101,13 +101,24 @@ public class UserServiceImpl implements UserService {
         requireAdmin();
         SysUser u = userMapper.selectById(id);
         if (u == null) throw new BusinessException("用户不存在");
-        u.setRealName(req.getRealName());
         Role role;
         try {
             role = Role.from(req.getRole());
         } catch (IllegalArgumentException e) {
             throw new BusinessException("角色不合法");
         }
+        // 规格：不能把当前登录账号降级为非管理员，否则前端登录态（ADMIN）与后端权限分裂
+        if (id.equals(UserContext.get().getId()) && role != Role.ADMIN) {
+            throw new BusinessException("不能变更当前登录账号的角色");
+        }
+        // 数据完整性：组长（领导至少一个小组）不能被降级为非组长，否则小组无人管理
+        if (u.getRole() == Role.LEADER && role != Role.LEADER) {
+            if (groupMapper.selectCount(new LambdaQueryWrapper<SysGroup>()
+                    .eq(SysGroup::getLeaderId, id)) > 0) {
+                throw new BusinessException("该用户是小组组长，请先更换组长");
+            }
+        }
+        u.setRealName(req.getRealName());
         u.setRole(role);
         u.setGroupId(req.getGroupId());
         userMapper.updateById(u);
@@ -123,6 +134,11 @@ public class UserServiceImpl implements UserService {
         if (memberMapper.selectCount(new LambdaQueryWrapper<TaskMember>()
                 .eq(TaskMember::getUserId, id)) > 0) {
             throw new BusinessException("该用户有任务记录，无法删除");
+        }
+        // 数据完整性：被小组引用为组长者拒绝删除，否则小组无人管理
+        if (groupMapper.selectCount(new LambdaQueryWrapper<SysGroup>()
+                .eq(SysGroup::getLeaderId, id)) > 0) {
+            throw new BusinessException("该用户是小组组长，无法删除");
         }
         userMapper.deleteById(id);
     }

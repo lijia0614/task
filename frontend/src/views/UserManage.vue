@@ -113,7 +113,9 @@
                     :disabled="formSubmitting" placeholder="显示姓名" />
         </el-form-item>
         <el-form-item label="角色" required>
-          <el-select v-model="userForm.role" class="role-select" :disabled="formSubmitting"
+          <el-select v-model="userForm.role" class="role-select"
+                     :disabled="formSubmitting || editingSelfRole"
+                     :title="editingSelfRole ? '不能变更当前登录账号的角色' : ''"
                      style="width: 100%">
             <el-option v-for="option in roleOptions" :key="option.value"
                        :label="option.label" :value="option.value" />
@@ -139,7 +141,7 @@
                :width="resetDialogWidth" destroy-on-close
                :close-on-click-modal="!resetSubmitting" :close-on-press-escape="!resetSubmitting"
                :show-close="!resetSubmitting" :before-close="beforeResetClose" @closed="onResetClosed">
-      <p class="reset-note">重置后，用户需要使用新密码重新登录。</p>
+      <p class="reset-note">重置后，该用户下次登录请使用新密码；已登录的会话在令牌过期前不受影响。</p>
       <el-input v-model="newPassword" class="reset-password-input" type="password" show-password
                 autocomplete="new-password" :disabled="resetSubmitting" placeholder="输入至少 6 位新密码"
                 @keyup.enter="submitReset" />
@@ -199,6 +201,9 @@ const roleText = role => ({ ADMIN: '管理员', LEADER: '组长', EMPLOYEE: '员
 const roleTagType = role => ({ ADMIN: 'danger', LEADER: 'warning', EMPLOYEE: 'info' }[role] || 'info')
 const userInitial = user => String(user.realName || user.username || '?').slice(0, 1)
 const isCurrentUser = user => Number(user.id) === Number(auth.user?.id)
+/** 编辑弹窗中正在编辑当前登录账号：角色禁止变更（后端同样拒绝自我降级） */
+const editingSelfRole = computed(() =>
+  formMode.value === 'edit' && editTargetId.value !== null && isCurrentUser({ id: editTargetId.value }))
 const beforeFormClose = done => { if (!formSubmitting.value) done() }
 const beforeResetClose = done => { if (!resetSubmitting.value) done() }
 

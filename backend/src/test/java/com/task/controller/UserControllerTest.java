@@ -1,13 +1,16 @@
 package com.task.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.task.TaskApplication;
+import com.task.entity.SysGroup;
 import com.task.entity.SysUser;
 import com.task.entity.Task;
 import com.task.entity.TaskMember;
 import com.task.enums.AssignType;
 import com.task.enums.Role;
 import com.task.enums.TaskStatus;
+import com.task.mapper.SysGroupMapper;
 import com.task.mapper.SysUserMapper;
 import com.task.mapper.TaskMapper;
 import com.task.mapper.TaskMemberMapper;
@@ -15,6 +18,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -40,20 +44,25 @@ class UserControllerTest {
     @Autowired SysUserMapper userMapper;
     @Autowired TaskMapper taskMapper;
     @Autowired TaskMemberMapper memberMapper;
+    @Autowired SysGroupMapper groupMapper;
     @Autowired JdbcTemplate jdbcTemplate;
 
     /** 本用例自建数据 id（用例结束后按依赖顺序物理清理，不动种子数据） */
     private final List<Long> createdUserIds = new ArrayList<>();
     private final List<Long> createdTaskIds = new ArrayList<>();
     private final List<Long> createdMemberIds = new ArrayList<>();
+    private final List<Long> createdGroupIds = new ArrayList<>();
 
     @AfterEach
     void cleanup() {
         for (Long id : createdMemberIds) jdbcTemplate.update("DELETE FROM task_member WHERE id = ?", id);
         for (Long id : createdTaskIds) jdbcTemplate.update("DELETE FROM task WHERE id = ?", id);
+        // sys_group.leader_id 引用 sys_user，组必须先于用户删除
+        for (Long id : createdGroupIds) jdbcTemplate.update("DELETE FROM sys_group WHERE id = ?", id);
         for (Long id : createdUserIds) jdbcTemplate.update("DELETE FROM sys_user WHERE id = ?", id);
         createdMemberIds.clear();
         createdTaskIds.clear();
+        createdGroupIds.clear();
         createdUserIds.clear();
     }
 
@@ -75,6 +84,29 @@ class UserControllerTest {
         long id = Long.parseLong(body.replaceAll(".*\"data\":(\\d+).*", "$1"));
         createdUserIds.add(id);
         return id;
+    }
+
+    /** 建一个指定角色的唯一用户，返回其 id（登记 @AfterEach 清理） */
+    private long createUser(String username, Role role) throws Exception {
+        String token = login("admin", "admin123");
+        String body = mvc.perform(post("/api/users").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + username + "\",\"password\":\"123456\",\"realName\":\"测试用户\",\"role\":\"" + role.getValue() + "\",\"groupId\":null}"))
+                .andExpect(jsonPath("$.code").value(0))
+                .andReturn().getResponse().getContentAsString();
+        long id = Long.parseLong(body.replaceAll(".*\"data\":(\\d+).*", "$1"));
+        createdUserIds.add(id);
+        return id;
+    }
+
+    /** 建一个组长为 leaderId 的小组，返回 group id（登记 @AfterEach 清理） */
+    private long createGroupWithLeader(long leaderId) {
+        SysGroup g = new SysGroup();
+        g.setName("组长测试组" + System.currentTimeMillis());
+        g.setLeaderId(leaderId);
+        groupMapper.insert(g);
+        createdGroupIds.add(g.getId());
+        return g.getId();
     }
 
     @Test
@@ -245,6 +277,62 @@ class UserControllerTest {
                         .content("{\"realName\":\"x\",\"role\":\"EMPLOYEE\",\"groupId\":null}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(403));
+    }
+
+    /** 规格：admin 不能把当前登录账号降级为非管理员（否则前端登录态 ADMIN 与后端权限分裂） */
+    @Test
+    void adminCannotDemoteSelf() throws Exception {
+        SysUser admin = userMapper.selectOne(new LambdaQueryWrapper<SysUser>()
+                .eq(SysUser::getUsername, "admin"));
+        String token = login("admin", "admin123");
+        mvc.perform(put("/api/users/" + admin.getId()).header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"realName\":\"" + admin.getRealName() + "\",\"role\":\"EMPLOYEE\",\"groupId\":null}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400));
+        // 数据未被篡改：角色与姓名保持原样
+        SysUser after = userMapper.selectById(admin.getId());
+        assertEquals(Role.ADMIN, after.getRole());
+        assertEquals(admin.getRealName(), after.getRealName());
+    }
+
+    /** 数据完整性：小组组长不能被删除（否则小组无人管理）；保留任务成员删除保护 */
+    @Test
+    void leaderOfGroupCannotBeDeleted() throws Exception {
+        long userId = createUser("leadergroupdel" + System.currentTimeMillis(), Role.EMPLOYEE);
+        createGroupWithLeader(userId);
+        String token = login("admin", "admin123");
+        mvc.perform(delete("/api/users/" + userId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400));
+        assertNotNull(userMapper.selectById(userId));
+    }
+
+    /** 数据完整性：领导小组的组长不能被降级为非组长（否则小组无人管理） */
+    @Test
+    void leaderOfGroupCannotBeDemoted() throws Exception {
+        long userId = createUser("leadergroupdem" + System.currentTimeMillis(), Role.LEADER);
+        createGroupWithLeader(userId);
+        String token = login("admin", "admin123");
+        mvc.perform(put("/api/users/" + userId).header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"realName\":\"测试用户\",\"role\":\"EMPLOYEE\",\"groupId\":null}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400));
+        assertEquals(Role.LEADER, userMapper.selectById(userId).getRole());
+    }
+
+    /** 未领导任何小组的组长允许降级（避免保护过度） */
+    @Test
+    void leaderWithoutGroupCanBeDemoted() throws Exception {
+        long userId = createUser("leaderfree" + System.currentTimeMillis(), Role.LEADER);
+        String token = login("admin", "admin123");
+        mvc.perform(put("/api/users/" + userId).header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"realName\":\"测试用户\",\"role\":\"EMPLOYEE\",\"groupId\":null}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+        assertEquals(Role.EMPLOYEE, userMapper.selectById(userId).getRole());
     }
 
     /** 分页参数非法应返回 400；契约：size 上限为 1000 */
