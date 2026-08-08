@@ -23,6 +23,11 @@
       <el-button :icon="RefreshLeft" @click="resetFilters">重置</el-button>
     </section>
 
+    <el-alert v-if="groupsError" class="groups-error" type="warning" :closable="false" show-icon>
+      <span>小组列表加载失败，新建/编辑用户暂不可用：{{ groupsError }}</span>
+      <el-button link type="primary" :icon="Refresh" @click="loadGroups">重试</el-button>
+    </el-alert>
+
     <div v-if="error" class="section center-state">
       <el-result icon="error" title="加载失败" :sub-title="error">
         <template #extra>
@@ -169,6 +174,8 @@ const groups = ref([])
 const total = ref(0)
 const loading = ref(false)
 const error = ref('')
+/** 小组列表加载失败：显式可见并可重试；失败期间阻止打开新建/编辑弹窗，避免小组选项缺失仍看似有效 */
+const groupsError = ref('')
 const query = reactive({ page: 1, size: 10, keyword: '', role: '' })
 const formVisible = ref(false)
 const formMode = ref('create')
@@ -224,9 +231,15 @@ const loadGroups = async () => {
   const seq = ++groupRequestSeq
   try {
     const data = await listGroups()
-    if (seq === groupRequestSeq) groups.value = Array.isArray(data) ? data : []
-  } catch {
-    if (seq === groupRequestSeq) groups.value = []
+    if (seq === groupRequestSeq) {
+      groups.value = Array.isArray(data) ? data : []
+      groupsError.value = ''
+    }
+  } catch (e) {
+    if (seq === groupRequestSeq) {
+      groups.value = []
+      groupsError.value = e.message || '网络错误'
+    }
   }
 }
 
@@ -250,7 +263,17 @@ const resetUserForm = () => {
   userForm.groupId = null
 }
 
+/** 小组加载失败时阻止新建/编辑：让用户先重试，而不是打开一个小组选项缺失的表单 */
+const ensureGroupsReady = () => {
+  if (groupsError.value) {
+    ElMessage.warning('小组列表加载失败，请先点击重试')
+    return false
+  }
+  return true
+}
+
 const openCreate = () => {
+  if (!ensureGroupsReady()) return
   formMode.value = 'create'
   editTargetId.value = null
   resetUserForm()
@@ -258,6 +281,7 @@ const openCreate = () => {
 }
 
 const openEdit = user => {
+  if (!ensureGroupsReady()) return
   formMode.value = 'edit'
   editTargetId.value = user.id
   userForm.username = user.username || ''
@@ -369,6 +393,7 @@ onBeforeUnmount(() => {
 .eyebrow { display: block; color: var(--color-text-muted); font-size: 11px; font-weight: 600; letter-spacing: .08em; }
 .head-actions { display: flex; gap: 8px; }
 .filter-section { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.groups-error { margin-bottom: 12px; }
 .keyword-input { width: min(320px, 40vw); }
 .role-filter { width: 150px; }
 .center-state { min-height: 380px; display: grid; place-items: center; }

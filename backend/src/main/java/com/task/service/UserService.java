@@ -1,6 +1,7 @@
 package com.task.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.task.dto.UpdateUserRequest;
 import com.task.dto.UserRequest;
 import com.task.vo.UserVO;
 
@@ -13,7 +14,7 @@ public interface UserService {
 
     Long create(UserRequest req);
 
-    void update(Long id, UserRequest req);
+    void update(Long id, UpdateUserRequest req);
 
     void delete(Long id);
 

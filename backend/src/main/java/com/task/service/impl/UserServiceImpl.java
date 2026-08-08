@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.task.auth.UserContext;
 import com.task.common.BusinessException;
+import com.task.dto.UpdateUserRequest;
 import com.task.dto.UserRequest;
 import com.task.entity.SysGroup;
 import com.task.entity.SysUser;
@@ -96,7 +97,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public void update(Long id, UserRequest req) {
+    public void update(Long id, UpdateUserRequest req) {
         requireAdmin();
         SysUser u = userMapper.selectById(id);
         if (u == null) throw new BusinessException("用户不存在");
@@ -131,7 +132,9 @@ public class UserServiceImpl implements UserService {
         requireAdmin();
         SysUser u = userMapper.selectById(id);
         if (u == null) throw new BusinessException("用户不存在");
+        // 与创建/前端一致：最少 6 位；重置接口不走 DTO 校验，必须显式检查
         if (!StringUtils.hasText(password)) throw new BusinessException("密码不能为空");
+        if (password.length() < 6) throw new BusinessException("密码至少 6 位");
         u.setPassword(encoder.encode(password));
         userMapper.updateById(u);
     }

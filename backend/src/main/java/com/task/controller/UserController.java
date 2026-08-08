@@ -2,6 +2,7 @@ package com.task.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.task.common.Result;
+import com.task.dto.UpdateUserRequest;
 import com.task.dto.UserRequest;
 import com.task.service.UserService;
 import com.task.vo.UserVO;
@@ -37,7 +38,7 @@ public class UserController {
     }
 
     @PutMapping("/{id}")
-    public Result<Void> update(@PathVariable Long id, @RequestBody UserRequest req) {
+    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest req) {
         userService.update(id, req);
         return Result.ok();
     }

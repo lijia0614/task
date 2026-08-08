@@ -2,16 +2,11 @@ package com.task.dto;
 
 import com.task.enums.Role;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+/** 编辑用户请求：与创建分离，不含 username/password（用户名不可改，密码走独立重置接口） */
 @Data
-public class UserRequest {
-    @NotBlank(message = "用户名不能为空")
-    private String username;
-    @NotBlank(message = "密码不能为空")
-    @Size(min = 6, message = "密码至少 6 位")
-    private String password;
+public class UpdateUserRequest {
     @NotBlank(message = "姓名不能为空")
     private String realName;
     private String role = Role.EMPLOYEE.getValue();

@@ -13,6 +13,8 @@ import com.task.mapper.TaskMapper;
 import com.task.mapper.TaskMemberMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -26,6 +28,7 @@ import java.util.List;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -172,8 +175,79 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.code").value(400));
     }
 
-    /** 分页参数非法应返回 400；契约：size 上限为 1000 */
+    /** 重置密码成功：新密码可登录（验证 BCrypt 更新生效） */
+    @Test
+    void adminCanResetPassword() throws Exception {
+        String username = "resettest" + System.currentTimeMillis();
+        long userId = createEmployee(username);
+        String token = login("admin", "admin123");
+        mvc.perform(put("/api/users/" + userId + "/password").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"password\":\"newpass6\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(om.writeValueAsString(java.util.Map.of("username", username, "password", "newpass6"))))
+                .andExpect(jsonPath("$.code").value(0));
+    }
 
+    /** 规格/UI 契约：密码至少 6 位；直接 PUT 短密码必须拒绝，且原密码不受影响 */
+    @Test
+    void resetPasswordShortPasswordRejected() throws Exception {
+        String username = "shortpass" + System.currentTimeMillis();
+        long userId = createEmployee(username);
+        String token = login("admin", "admin123");
+        mvc.perform(put("/api/users/" + userId + "/password").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"password\":\"123\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400));
+        // 密码未被篡改：原密码仍可登录
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(om.writeValueAsString(java.util.Map.of("username", username, "password", "123456"))))
+                .andExpect(jsonPath("$.code").value(0));
+    }
+
+    /** 编辑用户：请求体不含 username/password（用户名不可改，密码走独立重置接口）；
+     *  修复前 UserRequest @NotBlank 使该载荷必然 400，编辑功能不可用 */
+    @Test
+    void adminCanUpdateUser() throws Exception {
+        long userId = createEmployee("updatetest" + System.currentTimeMillis());
+        String token = login("admin", "admin123");
+        mvc.perform(put("/api/users/" + userId).header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"realName\":\"更新后的姓名\",\"role\":\"LEADER\",\"groupId\":null}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+        SysUser updated = userMapper.selectById(userId);
+        assertEquals("更新后的姓名", updated.getRealName());
+        assertEquals(Role.LEADER, updated.getRole());
+    }
+
+    /** 编辑用户缺姓名必须 400（UpdateUserRequest @NotBlank） */
+    @Test
+    void updateRequiresRealName() throws Exception {
+        long userId = createEmployee("updname" + System.currentTimeMillis());
+        String token = login("admin", "admin123");
+        mvc.perform(put("/api/users/" + userId).header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"EMPLOYEE\",\"groupId\":null}"))
+                .andExpect(jsonPath("$.code").value(400));
+    }
+
+    /** 编辑用户仅管理员；员工 403 */
+    @Test
+    void employeeCannotUpdateUser() throws Exception {
+        long userId = createEmployee("upd403" + System.currentTimeMillis());
+        String token = login("zhangsan", "123456");
+        mvc.perform(put("/api/users/" + userId).header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"realName\":\"x\",\"role\":\"EMPLOYEE\",\"groupId\":null}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(403));
+    }
+
+    /** 分页参数非法应返回 400；契约：size 上限为 1000 */
     @Test
     void invalidPagingParamsReturn400() throws Exception {
         String token = login("admin", "admin123");

@@ -1,18 +1,19 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 const routes = [
-  { path: '/login', component: () => import('../views/Login.vue') },
+  { path: '/login', name: 'login', component: () => import('../views/Login.vue') },
   {
     path: '/',
+    name: 'layout',
     component: () => import('../layout/Layout.vue'),
     redirect: '/tasks',
     children: [
-      { path: 'tasks', component: () => import('../views/TaskList.vue') },
-      { path: 'tasks/create', component: () => import('../views/TaskCreate.vue') },
-      { path: 'tasks/:id', component: () => import('../views/TaskDetail.vue') },
-      { path: 'reports/pending', component: () => import('../views/ReportReview.vue') },
-      { path: 'groups', component: () => import('../views/GroupManage.vue') },
-      { path: 'users', component: () => import('../views/UserManage.vue') }
+      { path: 'tasks', name: 'task-list', component: () => import('../views/TaskList.vue') },
+      { path: 'tasks/create', name: 'task-create', component: () => import('../views/TaskCreate.vue') },
+      { path: 'tasks/:id', name: 'task-detail', component: () => import('../views/TaskDetail.vue') },
+      { path: 'reports/pending', name: 'report-review', component: () => import('../views/ReportReview.vue') },
+      { path: 'groups', name: 'group-manage', component: () => import('../views/GroupManage.vue') },
+      { path: 'users', name: 'user-manage', component: () => import('../views/UserManage.vue') }
     ]
   }
 ]
@@ -30,16 +31,18 @@ function loadRole() {
   }
 }
 
+// 守卫用路由 name 而非 to.path：Vue Router 对 '/users/'（尾斜杠）等也解析到
+// 同一路由记录，精确 path 比较会漏掉这些变体，导致越权访问绕过
 router.beforeEach((to) => {
-  if (to.path !== '/login' && !localStorage.getItem('token')) return '/login'
-  if (to.path === '/login' && localStorage.getItem('token')) return '/tasks'
+  if (to.name !== 'login' && !localStorage.getItem('token')) return '/login'
+  if (to.name === 'login' && localStorage.getItem('token')) return '/tasks'
   // 创建与审核仅管理员/组长；直接访问 URL 的越权用户安全返回任务列表
-  if (to.path === '/tasks/create' || to.path === '/reports/pending') {
+  if (to.name === 'task-create' || to.name === 'report-review') {
     const role = loadRole()
     if (role !== 'ADMIN' && role !== 'LEADER') return '/tasks'
   }
   // 用户目录包含账号与组织信息，只允许管理员直接访问
-  if (to.path === '/users' && loadRole() !== 'ADMIN') return '/tasks'
+  if (to.name === 'user-manage' && loadRole() !== 'ADMIN') return '/tasks'
 })
 
 export default router
