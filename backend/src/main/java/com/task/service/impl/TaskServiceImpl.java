@@ -1,6 +1,7 @@
 package com.task.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.task.auth.UserContext;
 import com.task.common.BusinessException;
 import com.task.dto.CreateTaskRequest;
@@ -22,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -175,7 +175,8 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
-    public List<TaskVO> list(String type, String status, String keyword, SysUser cur) {
+    public Page<TaskVO> list(long page, long size, String type, String status, String keyword, SysUser cur) {
+        if (page < 1 || size < 1 || size > 1000) throw new BusinessException("分页参数不合法");
         List<Long> myTaskIds = memberMapper.selectList(new LambdaQueryWrapper<TaskMember>()
                         .eq(TaskMember::getUserId, cur.getId()))
                 .stream().map(TaskMember::getTaskId).collect(Collectors.toList());
@@ -187,10 +188,13 @@ public class TaskServiceImpl implements TaskService {
         if ("mine_created".equals(type)) {
             qw.eq(Task::getCreatorId, cur.getId());
         } else if ("assigned".equals(type)) {
-            if (myTaskIds.isEmpty()) return Collections.emptyList();
+            if (myTaskIds.isEmpty()) return new Page<>(page, size);
             qw.in(Task::getId, myTaskIds);
         }
-        return taskMapper.selectList(qw).stream().map(this::toVO).collect(Collectors.toList());
+        Page<Task> p = taskMapper.selectPage(new Page<>(page, size), qw);
+        Page<TaskVO> voPage = new Page<>(p.getCurrent(), p.getSize(), p.getTotal());
+        voPage.setRecords(p.getRecords().stream().map(this::toVO).collect(Collectors.toList()));
+        return voPage;
     }
 
     @Override

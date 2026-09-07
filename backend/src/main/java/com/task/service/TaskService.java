@@ -3,6 +3,7 @@ package com.task.service;
 import com.task.dto.CreateTaskRequest;
 import com.task.entity.SysUser;
 import com.task.vo.TaskVO;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import java.util.List;
 import java.util.Map;
@@ -10,7 +11,7 @@ import java.util.Map;
 public interface TaskService {
     Long create(CreateTaskRequest req);
 
-    List<TaskVO> list(String type, String status, String keyword, SysUser cur);
+    Page<TaskVO> list(long page, long size, String type, String status, String keyword, SysUser cur);
 
     TaskVO detail(Long id);
 

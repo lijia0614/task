@@ -5,6 +5,7 @@ import com.task.common.Result;
 import com.task.dto.CreateTaskRequest;
 import com.task.service.TaskService;
 import com.task.vo.TaskVO;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -24,10 +25,12 @@ public class TaskController {
     }
 
     @GetMapping
-    public Result<List<TaskVO>> list(@RequestParam(required = false) String type,
+    public Result<Page<TaskVO>> list(@RequestParam(defaultValue = "1") long page,
+                                     @RequestParam(defaultValue = "12") long size,
+                                     @RequestParam(required = false) String type,
                                      @RequestParam(required = false) String status,
                                      @RequestParam(required = false) String keyword) {
-        return Result.ok(taskService.list(type, status, keyword, UserContext.get()));
+        return Result.ok(taskService.list(page, size, type, status, keyword, UserContext.get()));
     }
 
     @GetMapping("/{id}")
