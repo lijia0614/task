@@ -134,7 +134,8 @@ const load = async () => {
       size: pageSize
     })
     if (seq !== requestSeq) return // 过期响应丢弃
-    records.value = data.records
+    // 防御：后端异常时 records 可能非数组（如 null），兜底为空数组避免模板 !records.length 抛错
+    records.value = Array.isArray(data.records) ? data.records : []
     total.value = data.total
   } catch (e) {
     if (seq !== requestSeq) return // 过期失败也丢弃
@@ -329,4 +330,10 @@ onMounted(load)
 }
 
 .task-pagination { display: flex; justify-content: center; margin-top: 16px; }
+
+/* 窄屏分页：与用户管理页同款——隐藏总数、防溢出 */
+@media (max-width: 640px) {
+  .task-pagination { overflow: hidden; }
+  .task-pagination :deep(.el-pagination__total) { display: none; }
+}
 </style>
