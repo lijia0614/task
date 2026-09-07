@@ -42,9 +42,10 @@ class TaskControllerTest {
     @Autowired SysUserMapper userMapper;
     @Autowired JdbcTemplate jdbcTemplate;
 
-    /** 本用例自建数据 id（按依赖顺序物理清理：task_member → task，不动种子数据） */
+    /** 本用例自建数据 id（按依赖顺序物理清理：task_member → task → sys_user，不动种子数据） */
     private final List<Long> createdTaskIds = new ArrayList<>();
     private final List<Long> createdMemberIds = new ArrayList<>();
+    private final List<Long> createdUserIds = new ArrayList<>();
 
     @AfterEach
     void cleanup() {
@@ -52,6 +53,8 @@ class TaskControllerTest {
         for (Long id : createdTaskIds) jdbcTemplate.update("DELETE FROM task WHERE id = ?", id);
         createdMemberIds.clear();
         createdTaskIds.clear();
+        for (Long id : createdUserIds) jdbcTemplate.update("DELETE FROM sys_user WHERE id = ?", id);
+        createdUserIds.clear();
     }
 
     private String login(String username, String password) throws Exception {
@@ -152,6 +155,25 @@ class TaskControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.total").value(25))
+                .andExpect(jsonPath("$.data.records.length()").value(0));
+    }
+
+    /** 无任何任务成员记录的用户在「分配给我的」下得到空分页（records 必须是非 null 空数组） */
+    @Test
+    void assignedTabWithNoMembershipsReturnsEmptyPage() throws Exception {
+        String admin = login("admin", "admin123");
+        String uname = "emptymember" + System.currentTimeMillis();
+        String body = mvc.perform(post("/api/users").header("Authorization", "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + uname + "\",\"password\":\"123456\",\"realName\":\"无任务用户\",\"role\":\"EMPLOYEE\",\"groupId\":null}"))
+                .andExpect(jsonPath("$.code").value(0))
+                .andReturn().getResponse().getContentAsString();
+        createdUserIds.add(Long.parseLong(body.replaceAll(".*\"data\":(\\d+).*", "$1")));
+        String token = login(uname, "123456");
+        mvc.perform(get("/api/tasks").header("Authorization", "Bearer " + token).param("type", "assigned"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.total").value(0))
                 .andExpect(jsonPath("$.data.records.length()").value(0));
     }
 }
