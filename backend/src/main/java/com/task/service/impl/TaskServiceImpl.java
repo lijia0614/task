@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -181,10 +182,18 @@ public class TaskServiceImpl implements TaskService {
                         .eq(TaskMember::getUserId, cur.getId()))
                 .stream().map(TaskMember::getTaskId).collect(Collectors.toList());
 
+        boolean overdue = "OVERDUE".equals(status);
         LambdaQueryWrapper<Task> qw = new LambdaQueryWrapper<Task>()
-                .eq(StringUtils.hasText(status), Task::getStatus, status)
-                .like(StringUtils.hasText(keyword), Task::getName, keyword)
-                .orderByDesc(Task::getId);
+                .eq(!overdue && StringUtils.hasText(status), Task::getStatus, status)
+                // 已过期：未完成且过了 deadline（Java 侧本地时间，与前端标红口径一致；不用 SQL NOW() 避免容器 UTC 偏差）
+                .lt(overdue, Task::getDeadline, LocalDateTime.now())
+                .ne(overdue, Task::getStatus, TaskStatus.DONE)
+                .like(StringUtils.hasText(keyword), Task::getName, keyword);
+        if (overdue) {
+            qw.orderByAsc(Task::getDeadline).orderByDesc(Task::getId);
+        } else {
+            qw.orderByDesc(Task::getId);
+        }
         if ("mine_created".equals(type)) {
             qw.eq(Task::getCreatorId, cur.getId());
         } else if ("assigned".equals(type)) {
