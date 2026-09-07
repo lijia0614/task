@@ -29,7 +29,7 @@
 
 - 新增参数：`page`（默认 1）、`size`（默认 12）
 - 校验（与 `/api/users` 一致）：`page < 1 || size < 1 || size > 1000` → HTTP 200 业务 code 400，消息「分页参数不合法」
-- 响应：`{code:0, data:{records: TaskVO[], total, current, size}}`（由 `Result<Page<TaskVO>>` 序列化；Page 来自 MyBatis-Plus `com.baomidou.mybatisplus.extension.plugins.pagination.Page`，与 UserVO 分页同款；注意 MP Page 序列化的页码字段名是 `current`，前端不自读它——前端自己维护当前页码）
+- 响应：`{code:0, data:{records: TaskVO[], total, current, size}}`（由 `Result<Page<TaskVO>>` 序列化；Page 来自 MyBatis-Plus `com.baomidou.mybatisplus.extension.plugins.pagination.Page`，与 UserVO 分页同款；注意 MP Page 序列化的页码字段名是 `current`，前端不自读它——前端自己维护当前页码；线上还会附带 `pages`（getPages() 总页数）字段，无消费者使用，属可接受的多余字段）
 - 排序不变：`orderByDesc(id)`
 - type（all/mine_created/assigned）、status、keyword 过滤逻辑原样保留，与分页叠加
 
@@ -53,6 +53,7 @@
 2. 分页正确性：admin/leader1 造 25 条任务，`page=2&size=10` 返回恰好 10 条、`total=25`、与 page=1 的记录不重不漏（按 id desc 验证边界）
 3. 筛选与分页叠加：`status=DOING` + 分页，total 只含过滤后数量
 4. 空页：page 超出范围返回空 records、total 正常，HTTP 200 code 0
+5. （fix 轮新增）无任何任务成员的用户 `type=assigned`：records 为**非 null 空数组**、total=0（钉住 MP Page 空分支的 records 契约）
 
 前端（/tmp 无端口 mock 走查，沿用 task17/task18 脚本模式）：
 - 造 25+ 条任务 → 首页 12 条、翻到第 2 页内容变化且正确

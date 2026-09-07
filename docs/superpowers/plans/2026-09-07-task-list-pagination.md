@@ -658,4 +658,9 @@ Expected: 提交后工作区仅剩 `?? backend/src/main/java/com/task/config/Sta
 
 - [ ] **Step 4: 报告**
 
-报告内容：commit SHA 列表、已提交文件、测试结果（TaskControllerTest 4/4、全量、build、mock 3/3）、残留风险（无新风险；快照分页不做属已批准范围）、**不 push**（除非用户指示）。
+报告内容：commit SHA 列表、已提交文件、测试结果（TaskControllerTest 5/5、全量 99/99、build、mock 3/3）、已知限制（见下）、**不 push**（除非用户指示）。
+
+**已知限制（有意识延后，最终整体 review 记录）：**
+- 翻页瞬间显示 6 卡骨架（loading 态未随分页改造，属设计取舍）
+- 非数字 `page`/`size` 返回业务 500（`GlobalExceptionHandler` 无类型不匹配 handler，与 `/api/users` 同源旧缺陷）
+- `toVO` 逐条查询（N+1）为既有实现，分页后已按页大小封顶（默认 12）
