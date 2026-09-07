@@ -29,7 +29,7 @@
 
 - 新增参数：`page`（默认 1）、`size`（默认 12）
 - 校验（与 `/api/users` 一致）：`page < 1 || size < 1 || size > 1000` → HTTP 200 业务 code 400，消息「分页参数不合法」
-- 响应：`{code:0, data:{records: TaskVO[], total, page, size}}`（由 `Result<Page<TaskVO>>` 序列化；Page 来自 MyBatis-Plus `com.baomidou.mybatisplus.extension.plugins.pagination.Page`，与 UserVO 分页同款）
+- 响应：`{code:0, data:{records: TaskVO[], total, current, size}}`（由 `Result<Page<TaskVO>>` 序列化；Page 来自 MyBatis-Plus `com.baomidou.mybatisplus.extension.plugins.pagination.Page`，与 UserVO 分页同款；注意 MP Page 序列化的页码字段名是 `current`，前端不自读它——前端自己维护当前页码）
 - 排序不变：`orderByDesc(id)`
 - type（all/mine_created/assigned）、status、keyword 过滤逻辑原样保留，与分页叠加
 
