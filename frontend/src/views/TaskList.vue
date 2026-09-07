@@ -2,15 +2,15 @@
   <div>
     <!-- 筛选栏：无框、紧凑 -->
     <div class="filter-bar">
-      <el-tabs v-model="activeTab" @tab-change="load">
+      <el-tabs v-model="activeTab" @tab-change="resetPageAndLoad">
         <el-tab-pane label="全部" name="all" />
         <el-tab-pane v-if="auth.canCreateTask" label="我创建的" name="mine_created" />
         <el-tab-pane label="分配给我的" name="assigned" />
       </el-tabs>
       <div class="filter-right">
         <el-input v-model="keyword" class="kw-input" placeholder="搜索任务名称" clearable
-                  :prefix-icon="Search" @keyup.enter="load" @clear="load" />
-        <el-select v-model="status" class="status-select" placeholder="全部状态" clearable @change="load">
+                  :prefix-icon="Search" @keyup.enter="resetPageAndLoad" @clear="resetPageAndLoad" />
+        <el-select v-model="status" class="status-select" placeholder="全部状态" clearable @change="resetPageAndLoad">
           <el-option label="进行中" value="DOING" />
           <el-option label="已完成" value="DONE" />
         </el-select>
@@ -46,13 +46,13 @@
       </div>
 
       <!-- 空状态 -->
-      <div v-else-if="!tasks.length" class="section center-box">
+      <div v-else-if="!records.length" class="section center-box">
         <el-empty description="暂无任务" :image-size="80" />
       </div>
 
       <!-- 任务卡片 -->
       <div v-else class="card-grid">
-        <div v-for="t in tasks" :key="t.id" class="task-card" tabindex="0" role="link"
+        <div v-for="t in records" :key="t.id" class="task-card" tabindex="0" role="link"
              :aria-label="`查看任务：${t.name}`" @click="open(t)"
              @keydown.enter="open(t)" @keydown.space.prevent="open(t)">
           <div class="card-head">
@@ -84,6 +84,11 @@
         </div>
       </div>
     </div>
+
+    <!-- 分页：总数超过一页时显示（与用户管理页同款交互） -->
+    <el-pagination v-if="total > pageSize" class="task-pagination" layout="prev, pager, next, total"
+                   v-model:current-page="page" :page-size="pageSize" :total="total"
+                   @current-change="load" />
   </div>
 </template>
 
@@ -99,7 +104,10 @@ const router = useRouter()
 const activeTab = ref('all')
 const keyword = ref('')
 const status = ref('')
-const tasks = ref([])
+const records = ref([])   // 当前页记录（分页响应 records）
+const total = ref(0)      // 总数（分页响应 total）
+const page = ref(1)
+const pageSize = 12
 const loading = ref(false)
 const error = ref('')
 
@@ -121,17 +129,27 @@ const load = async () => {
     const data = await listTasks({
       type: activeTab.value,
       status: status.value || undefined,
-      keyword: keyword.value || undefined
+      keyword: keyword.value || undefined,
+      page: page.value,
+      size: pageSize
     })
     if (seq !== requestSeq) return // 过期响应丢弃
-    tasks.value = data
+    records.value = data.records
+    total.value = data.total
   } catch (e) {
     if (seq !== requestSeq) return // 过期失败也丢弃
     error.value = e.message || '网络错误'
-    tasks.value = []
+    records.value = []
+    total.value = 0
   } finally {
     if (seq === requestSeq) loading.value = false
   }
+}
+
+/** 筛选条件变化：回到第 1 页再加载 */
+const resetPageAndLoad = () => {
+  page.value = 1
+  load()
 }
 
 const open = (t) => router.push(`/tasks/${t.id}`)
@@ -309,4 +327,6 @@ onMounted(load)
   min-width: 34px;
   text-align: right;
 }
+
+.task-pagination { display: flex; justify-content: center; margin-top: 16px; }
 </style>
