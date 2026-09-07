@@ -489,6 +489,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from urllib.parse import parse_qsl
 
 from playwright.sync_api import sync_playwright
 
@@ -521,7 +522,8 @@ def handler(route):
                 "code": 0, "data": {"token": "t2", "user": {"id": 2, "username": "leader1",
                     "realName": "李组长", "role": "LEADER", "groupId": None, "groupName": None}}}))
         if path == "/api/tasks" and route.request.method == "GET":
-            params = dict(re.findall(r"([^=&]+)=([^&]*)", qs))
+            # 真实后端会做百分号解码；直接解析 qs 可同时得到解码后的键值
+            params = dict(parse_qsl(qs, keep_blank_values=True))
             typ = params.get("type", "all")
             kw = params.get("keyword", "")
             page, size = int(params.get("page", "1")), int(params.get("size", "12"))
