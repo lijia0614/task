@@ -11,8 +11,9 @@
         <el-input v-model="keyword" class="kw-input" placeholder="搜索任务名称" clearable
                   :prefix-icon="Search" @keyup.enter="resetPageAndLoad" @clear="resetPageAndLoad" />
         <el-select v-model="status" class="status-select" placeholder="全部状态" clearable @change="resetPageAndLoad">
-          <el-option label="进行中" value="DOING" />
+          <el-option label="未完成" value="DOING" />
           <el-option label="已完成" value="DONE" />
+          <el-option label="已过期" value="OVERDUE" />
         </el-select>
         <el-button v-if="auth.canCreateTask" type="primary" :icon="Plus" @click="$router.push('/tasks/create')">
           创建任务
@@ -47,7 +48,7 @@
 
       <!-- 空状态 -->
       <div v-else-if="!records.length" class="section center-box">
-        <el-empty description="暂无任务" :image-size="80" />
+        <el-empty :description="status === 'OVERDUE' ? '暂无已过期任务' : '暂无任务'" :image-size="80" />
       </div>
 
       <!-- 任务卡片 -->
