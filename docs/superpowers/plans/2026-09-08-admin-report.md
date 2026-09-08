@@ -62,6 +62,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -123,9 +124,12 @@ class AdminReportControllerTest {
         insertTask(TaskStatus.DONE, LocalDateTime.now().minusDays(5), null);   // 已完成
         insertTask(TaskStatus.DOING, null, null);                              // 无 deadline → 进行中
         long deletedId = insertTask(TaskStatus.DOING, LocalDateTime.now().minusDays(5), null);
-        Task del = taskMapper.selectById(deletedId);
-        del.setDeleted(1);
-        taskMapper.updateById(del);                                            // 已删除 → 不计数
+        // 项目把 deleted 配置为全局逻辑删除字段（application.yml logic-delete-field），
+        // updateById 写不进该列，必须走原生 SQL（参照 DeletedTaskReportCommentsTest）
+        jdbcTemplate.update("UPDATE task SET deleted = 1 WHERE id = ?", deletedId);
+        // 自证前提：确认 deleted 真的落库
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT deleted FROM task WHERE id = ?", Integer.class, deletedId));
 
         mvc.perform(get("/api/admin/reports/summary").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
