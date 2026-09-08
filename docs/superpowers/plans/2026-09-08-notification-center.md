@@ -216,7 +216,7 @@ class NotificationControllerTest {
     void groupTaskAssignNotifiesMembersExceptCreator() throws Exception {
         String token = login("leader1", "123456");
         long gid = createGroupWithAllThree();
-        long taskId = createTask(token, "通知小组任务" + System.currentTimeMillis(), "GROUP", gid, "[60,40]");
+        long taskId = createTask(token, "通知小组任务" + System.currentTimeMillis(), "GROUP", gid, "[50,30,20]");
         List<Notification> ns = notificationsOf(taskId);
         assertEquals(2, ns.size(), "zhangsan/wangwu 收到，组长本人跳过");
         List<Long> receivers = ns.stream().map(Notification::getUserId).toList();
