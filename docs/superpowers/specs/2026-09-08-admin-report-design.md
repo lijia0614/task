@@ -29,7 +29,7 @@
 - **完成率** = 已完成/总数 ×100（取整；总数为 0 时两率均为 0）
 - **逾期率** = 已过期/总数 ×100
 - `now` 用 Java 侧 `LocalDateTime.now()`（沿用既有 TZ 约定，与前端标红/列表 OVERDUE 一致）
-- 逻辑删除任务自动排除（@TableLogic 既有机制，无需额外条件）
+- **逻辑删除任务排除**：项目无 @TableLogic（逻辑删除是手动 `deleted=1`），汇总的三处计数必须显式加 `eq(deleted, 0)`（deleted 默认 0、永不 NULL，等值条件安全）
 
 ## 后端契约
 
@@ -56,7 +56,7 @@
 ## 测试与验证
 
 后端（新 `AdminReportControllerTest`，fixture 自建自清）：
-1. 口径四分类互斥：造已知组合（进行中×2、已过期×1、已完成×1、无 deadline 未完成×1）→ total=5、doing=3（含无 deadline 那条）、done=1、overdue=1、completionRate=20、overdueRate=20
+1. 口径四分类互斥：造已知组合（进行中×2、已过期×1、已完成×1、无 deadline 未完成×1，另加一条标记 deleted=1 的任务）→ total=5、doing=3（含无 deadline 那条）、done=1、overdue=1、completionRate=20、overdueRate=20（deleted 任务被排除，否则 total 会是 6）
 2. 时间范围过滤：直插 created_at 为 10 天前/3 天前的任务（直插需覆盖 @TableLogic 默认与 created_at 字段）→ range=7d 只统计 3 天前的
 3. 权限：zhangsan（EMPLOYEE）/leader1（LEADER）→ 403；admin → 0
 4. 无任务时（range=7d 且范围内无任务）→ 全 0、两率 0
