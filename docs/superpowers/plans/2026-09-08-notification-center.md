@@ -66,6 +66,12 @@ Expected: 输出 `notification` 一行。
 
 - [ ] **Step 3: 写失败测试（完整文件）**
 
+> **Review 加固记录**（实现时以上方代码为基础，已按两段 review 强化，以实际提交的测试文件为准）：
+> 1. 种子用户 group_id 快照恢复（groupRestore，防污染共享种子数据）
+> 2. 全局精确计数改基线相对（unread-count 断言 base+1/base；markAllRead 后置断言为 0 而非基线；跨用户隔离断言 leader1 未读不被误清）
+> 3. 列表断言改 records[0].id==nid 与"他人列表不含 nid"
+> 4. 清理未用注入（reportMapper/taskMapper/groupMapper/createdUserIds）与 assertTrue(!contains)→assertFalse
+
 `backend/src/test/java/com/task/controller/NotificationControllerTest.java`：
 
 ```java
