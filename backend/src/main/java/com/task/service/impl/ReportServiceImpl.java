@@ -11,6 +11,7 @@ import com.task.enums.ReportStatus;
 import com.task.enums.Role;
 import com.task.enums.TaskStatus;
 import com.task.mapper.*;
+import com.task.service.NotificationService;
 import com.task.service.ReportService;
 import com.task.vo.ReportVO;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class ReportServiceImpl implements ReportService {
     private final TaskMapper taskMapper;
     private final SysUserMapper userMapper;
     private final ReportHistoryMapper historyMapper;
+    private final NotificationService notificationService;
 
     /** 校验：新进度必须 ≥ 当前进度，且 ≤ 100 */
     public static void checkProgressRule(int current, int target) {
@@ -75,6 +77,8 @@ public class ReportServiceImpl implements ReportService {
         r.setStatus(ReportStatus.PENDING);
         reportMapper.insert(r);
         recordHistory(r, "SUBMITTED", null);
+        // 站内信：有汇报待审核（创建者=提交人时跳过）
+        notificationService.notifyReportSubmitted(task, current);
         return r.getId();
     }
 
@@ -166,6 +170,8 @@ public class ReportServiceImpl implements ReportService {
             task.setDoneAt(LocalDateTime.now());
         }
         taskMapper.updateById(task);
+        // 站内信：汇报已通过（提交人=审核人时跳过）
+        notificationService.notifyReportReviewed(task, report, reviewer, true, finalProgress, req.getReviewComment());
     }
 
     @Override
@@ -193,6 +199,8 @@ public class ReportServiceImpl implements ReportService {
         report.setReviewedAt(LocalDateTime.now());
         reportMapper.updateById(report);
         recordHistory(report, "REJECTED", null);
+        // 站内信：汇报被驳回（提交人=审核人时跳过）
+        notificationService.notifyReportReviewed(task, report, reviewer, false, null, req.getReviewComment());
     }
 
     /** PENDING → WITHDRAWN；仅提交人；状态变化并发时只有一个成功 */
@@ -285,6 +293,8 @@ public class ReportServiceImpl implements ReportService {
         report.setReviewedAt(null);
         report.setFinalProgress(null);
         recordHistory(report, "RESUBMITTED", null);
+        // 站内信：重提后再次通知审核人
+        notificationService.notifyReportSubmitted(task, UserContext.get());
     }
 
     @Override

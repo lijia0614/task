@@ -12,6 +12,7 @@ import com.task.enums.Role;
 import com.task.enums.TaskStatus;
 import com.task.mapper.*;
 import com.task.service.MinioObjectService;
+import com.task.service.NotificationService;
 import com.task.service.TaskService;
 import com.task.vo.AttachmentVO;
 import com.task.vo.TaskMemberVO;
@@ -39,6 +40,7 @@ public class TaskServiceImpl implements TaskService {
     private final SysUserMapper userMapper;
     private final SysGroupMapper groupMapper;
     private final TaskAttachmentMapper attachmentMapper;
+    private final NotificationService notificationService;
     private final MinioFileMapper minioFileMapper;
     private final ReportMapper reportMapper;
     private final MinioObjectService minioObjectService;
@@ -172,6 +174,8 @@ public class TaskServiceImpl implements TaskService {
                 attachmentMapper.insert(a);
             }
         }
+        // 站内信：被分配任务（同事务；创建者本人跳过）
+        notificationService.notifyTaskAssigned(task, creator, assignees);
         return task.getId();
     }
 
