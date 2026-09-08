@@ -1027,6 +1027,10 @@ git commit -m "feat: notification bell and center page"
 
 - [ ] **Step 1: 写 mock 脚本（完整文件）**
 
+> **执行修正记录**（mock 保真缺陷，与前端无关；以实际 /tmp/task21_notification_playwright.py 为准）：
+> 1. 未读 ID 改为 513-515（最新三条）——铃铛面板拉的是最新 5 条，原 501-503 为最旧，面板内不会出现未读
+> 2. 516 新通知的注入从 read-all 响应改到 unread-count 分支（read-all 后的第 2 次 unread-count GET 时注入，第 1 次是中心页挂载、第 2 次是 W5 刷新）——原方案让 W3 总数变 16 且 W4 提前消费掉新通知，W5 必挂
+
 ```python
 #!/usr/bin/env python3
 """Task 21 站内信 mock 走查（无端口）。
