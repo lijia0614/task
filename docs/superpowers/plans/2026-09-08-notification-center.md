@@ -1239,3 +1239,18 @@ cd /Users/lijia/workspaces/java/task && git diff --check && git log --oneline -6
 Expected: 工作区仅 `?? backend/src/main/java/com/task/config/StartupBanner.java`（绝不提交）。
 
 报告：commit SHA 列表、已提交文件、测试结果（NotificationControllerTest 9/9、全量、build、mock）、迁移执行记录（已执行一次）、残留风险、**不 push**（除非用户指示）。
+
+---
+
+## 遗留事项清单（终审记录，2026-09-08）
+
+有意识接受/延后的项，后续会话接手时直接查此处：
+
+1. **sibling 测试类不清通知残留**：TaskControllerTest 等测试类通过 API 造任务产生通知，其 cleanup 不删 notification 行；dev 库每次全量跑增长约 270 行。后续任务：给 sibling cleanup 加 `DELETE FROM notification WHERE task_id IN (...)` 或抽公共测试基类。
+2. **轮询失败 toast 噪音**：后端不可达时 30s 轮询每轮经拦截器弹一次「网络错误」。已接受；彻底修复需给 request.js 加按请求静默标记。
+3. **中心页分页 total 显示**：NotificationCenter 显示「共 N 条」，TaskList/UserManage 隐藏——风格差异，已接受。
+4. **dev 库通知残留增长**：与 #1 同源，测试库数据，已接受。
+5. **自我通知跳过分支无回归测试**：spec 列的「创建者自己提交 → 不产生」「提交人=审核人 → 不产生」两条 skip 分支无对应测试（生产可达但仅由 NotificationServiceImpl 守卫）。后续补 2 个测试。
+6. **notification 表无 user_id 索引**：所有查询按 user_id 过滤，表随使用增长。后续加 `KEY idx_notification_user (user_id)`（需新迁移）。
+7. **任务删除后通知残留**：通知不可删（设计），删除任务不清理其通知；点击该类通知落到任务详情错误态（优雅降级）。已接受。
+8. **双源未读收敛方向**：铃铛角标 ≤30s 收敛；中心页视图状态在重新进入时收敛（原地操作自愈）。语义精确表述，无缺陷。
