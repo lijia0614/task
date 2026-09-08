@@ -35,7 +35,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
-import request from '../api/request'
+import { reportSummary } from '../api/report'
 
 const range = ref('all')
 const data = ref(null)
@@ -50,7 +50,7 @@ const load = async () => {
   loading.value = true
   error.value = ''
   try {
-    const res = await request.get('/admin/reports/summary', { params: { range: range.value } })
+    const res = await reportSummary(range.value)
     if (seq !== requestSeq) return // 过期响应丢弃
     data.value = res
   } catch (e) {
@@ -103,6 +103,5 @@ onMounted(load)
   height: 100%;
   background: var(--color-primary);
   border-radius: 4px;
-  transition: width 0.3s;
 }
 </style>
