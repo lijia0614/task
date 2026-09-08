@@ -526,6 +526,9 @@ git commit -m "feat: 数据报表总览页与时间范围切换"
 
 - [ ] **Step 1: 写 mock 脚本（完整文件）**
 
+> **执行修正记录**（走查流程缺陷，与产品无关；以实际 /tmp/task22_adminreport_playwright.py 为准）：
+> W3 切 leader1 前必须先走真实登出流程（user-chip → 退出登录）——登录态下访问 /login 会被路由守卫刻意弹回 /tasks（router/index.js:40 是产品行为），直接第二次 login() 永远拿不到登录表单。
+
 ```python
 #!/usr/bin/env python3
 """Task 22 管理员报表 mock 走查（无端口）。
