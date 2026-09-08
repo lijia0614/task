@@ -192,13 +192,6 @@ onMounted(load)
   min-height: 400px;
 }
 
-.center-box {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 400px;
-}
-
 /* 卡片网格：桌面 3 列 / 平板 2 列 / 手机 1 列 */
 .card-grid {
   display: grid;

@@ -23,7 +23,7 @@
                    @click="drawerOpen = true" />
         <div class="topbar-title">{{ $route.meta.title || pageTitle }}</div>
         <div class="topbar-right">
-          <el-popover placement="bottom-end" :width="320" trigger="click" @show="loadRecent">
+          <el-popover ref="popRef" placement="bottom-end" :width="320" trigger="click" @show="loadRecent">
             <template #reference>
               <el-badge :value="unread" :hidden="unread === 0" class="bell-badge">
                 <el-button text :icon="Bell" class="bell-btn" aria-label="通知" title="通知" />
@@ -110,6 +110,7 @@ const onResize = () => { viewportWidth.value = window.innerWidth }
 onMounted(() => window.addEventListener('resize', onResize))
 onBeforeUnmount(() => window.removeEventListener('resize', onResize))
 
+const popRef = ref(null)
 const unread = ref(0)
 const recent = ref([])
 let pollTimer = null
@@ -137,25 +138,28 @@ const markAll = async () => {
     recent.value.forEach((n) => { n.read = true })
     ElMessage.success('已全部标记为已读')
   } catch (e) {
-    ElMessage.error(e.message || '操作失败')
+    // 错误提示已由请求拦截器统一弹出
   }
 }
 
 const openNotification = async (n) => {
+  popRef.value?.hide()
   if (!n.read) {
     try {
       await markRead(n.id)
       n.read = true
       unread.value = Math.max(0, unread.value - 1)
     } catch (e) {
-      ElMessage.error(e.message || '操作失败')
-      return
+      return // 错误提示已由请求拦截器统一弹出；失败则不跳转
     }
   }
   router.push(n.taskId ? `/tasks/${n.taskId}` : '/reports/pending')
 }
 
-const goCenter = () => router.push('/notifications')
+const goCenter = () => {
+  popRef.value?.hide()
+  router.push('/notifications')
+}
 
 onMounted(() => {
   fetchUnread()

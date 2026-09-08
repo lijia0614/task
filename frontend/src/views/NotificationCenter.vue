@@ -96,8 +96,7 @@ const openNotification = async (n) => {
       n.read = true
       unread.value = Math.max(0, unread.value - 1)
     } catch (e) {
-      ElMessage.error(e.message || '操作失败')
-      return
+      return // 错误提示已由请求拦截器统一弹出；失败则不跳转
     }
   }
   router.push(n.taskId ? `/tasks/${n.taskId}` : '/reports/pending')
@@ -112,7 +111,7 @@ const markAll = async () => {
     unread.value = 0
     ElMessage.success('已全部标记为已读')
   } catch (e) {
-    ElMessage.error(e.message || '操作失败')
+    // 错误提示已由请求拦截器统一弹出
   } finally {
     markingAll.value = false
   }

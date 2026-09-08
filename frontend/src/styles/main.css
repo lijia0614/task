@@ -72,6 +72,14 @@ body {
   margin-top: 12px;
 }
 
+/* 空态/错误态/加载态内容：居中展示，与 .section 配合使用 */
+.center-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
 .section-title {
   font-size: 15px;
   font-weight: 600;
