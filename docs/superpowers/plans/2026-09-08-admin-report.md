@@ -696,3 +696,14 @@ cd /Users/lijia/workspaces/java/task && git diff --check && git log --oneline -8
 Expected: 工作区 clean（StartupBanner.java 为 tracked 且未修改，不得提交其修改）。
 
 报告：commit SHA 列表、已提交文件、测试结果（AdminReportControllerTest 5/5、全量 116、build、mock）、残留风险、**不 push**（除非用户指示）。
+
+---
+
+## 遗留事项清单（终审记录，2026-09-08）
+
+有意识接受/延后的项：
+
+1. **三次 selectCount 非原子快照**：total/done/overdue 分三次查询，极端并发插入下理论 ±1 竞态；admin 低频接口，已接受（如需加固改单条原子聚合 SQL）。
+2. **dev 库孤儿行**：9 行 task_member + 6 行 report + 808 行 notification 残留（历史遗留，非本次范围，未触碰）。
+3. **报表精确断言依赖 task 表干净**：所有测试类自清且 seed 无任务，成立；若未来有并发测试或常驻数据需改基线相对断言。
+4. **规格文档口径修正记录**：spec 曾写「无 @TableLogic（手动 deleted=1）」——实际为 application.yml 全局 `logic-delete-field: deleted`（selectCount 自动过滤、updateById 拒写该列）。代码显式 `eq(deleted,0)` 在两套机制下均正确（无害幂等谓词），零代码影响。
