@@ -11,6 +11,7 @@
         <el-menu-item v-if="auth.canCreateTask" index="/reports/pending"><el-icon><ChatDotRound /></el-icon><span>待我审核</span></el-menu-item>
         <el-menu-item index="/groups"><el-icon><UserFilled /></el-icon><span>小组管理</span></el-menu-item>
         <el-menu-item v-if="auth.isAdmin" index="/users"><el-icon><Setting /></el-icon><span>用户管理</span></el-menu-item>
+        <el-menu-item v-if="auth.isAdmin" index="/reports"><el-icon><DataAnalysis /></el-icon><span>数据报表</span></el-menu-item>
       </el-menu>
     </aside>
 
@@ -78,6 +79,7 @@
         <el-menu-item v-if="auth.canCreateTask" index="/reports/pending"><el-icon><ChatDotRound /></el-icon><span>待我审核</span></el-menu-item>
         <el-menu-item index="/groups"><el-icon><UserFilled /></el-icon><span>小组管理</span></el-menu-item>
         <el-menu-item v-if="auth.isAdmin" index="/users"><el-icon><Setting /></el-icon><span>用户管理</span></el-menu-item>
+        <el-menu-item v-if="auth.isAdmin" index="/reports"><el-icon><DataAnalysis /></el-icon><span>数据报表</span></el-menu-item>
       </el-menu>
     </el-drawer>
   </div>
@@ -87,7 +89,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Bell, Menu, SwitchButton, User } from '@element-plus/icons-vue'
+import { Bell, DataAnalysis, Menu, SwitchButton, User } from '@element-plus/icons-vue'
 import { useAuthStore } from '../store/auth'
 import { listNotifications, markAllRead, markRead, unreadCount } from '../api/notification'
 
@@ -103,6 +105,7 @@ const pageTitle = computed(() => ({
   '/reports/pending': '待我审核',
   '/groups': '小组管理',
   '/users': '用户管理',
+  '/reports': '数据报表',
   '/notifications': '消息中心'
 }[router.currentRoute.value.path] || '任务分配系统'))
 

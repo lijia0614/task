@@ -14,7 +14,8 @@ const routes = [
       { path: 'reports/pending', name: 'report-review', component: () => import('../views/ReportReview.vue') },
       { path: 'groups', name: 'group-manage', component: () => import('../views/GroupManage.vue') },
       { path: 'users', name: 'user-manage', component: () => import('../views/UserManage.vue') },
-      { path: 'notifications', name: 'notification-center', component: () => import('../views/NotificationCenter.vue') }
+      { path: 'notifications', name: 'notification-center', component: () => import('../views/NotificationCenter.vue') },
+      { path: 'reports', name: 'admin-report', component: () => import('../views/ReportOverview.vue') }
     ]
   }
 ]
@@ -44,6 +45,8 @@ router.beforeEach((to) => {
   }
   // 用户目录包含账号与组织信息，只允许管理员直接访问
   if (to.name === 'user-manage' && loadRole() !== 'ADMIN') return '/tasks'
+  // 报表仅管理员可访问
+  if (to.name === 'admin-report' && loadRole() !== 'ADMIN') return '/tasks'
 })
 
 export default router
