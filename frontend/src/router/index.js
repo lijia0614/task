@@ -13,7 +13,8 @@ const routes = [
       { path: 'tasks/:id', name: 'task-detail', component: () => import('../views/TaskDetail.vue') },
       { path: 'reports/pending', name: 'report-review', component: () => import('../views/ReportReview.vue') },
       { path: 'groups', name: 'group-manage', component: () => import('../views/GroupManage.vue') },
-      { path: 'users', name: 'user-manage', component: () => import('../views/UserManage.vue') }
+      { path: 'users', name: 'user-manage', component: () => import('../views/UserManage.vue') },
+      { path: 'notifications', name: 'notification-center', component: () => import('../views/NotificationCenter.vue') }
     ]
   }
 ]
